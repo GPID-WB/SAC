@@ -14,7 +14,7 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240429"
+release            <- "20240326"  # I have to changed it because I messed up the Y folder :(
 identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
@@ -42,23 +42,23 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# base_dir |> 
-#   fs::path("_common.R") |> 
-#   source(echo = FALSE)
-# 
+base_dir |>
+  fs::path("_common.R") |>
+  source(echo = FALSE)
+
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
 #   source(echo = FALSE)
 
 # filter for testing --------
-
-
+cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
+cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Check targets nested pipeline   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-tar_visnetwork()
+#tar_visnetwork()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #  Survey_means  ---------
@@ -69,6 +69,17 @@ tar_visnetwork()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Gd_means --------
+
+# Objective: Fetch GD survey means and convert them to daily values
+#
+# tar_target(
+#   gd_means, 
+#   get_groupdata_means(cache_inventory = cache_inventory, 
+#                       gdm            = dl_aux$gdm), 
+#   iteration = "list"
+# )
+
+gd_means <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
 
 
 

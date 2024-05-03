@@ -64,7 +64,8 @@ base_dir |>
 # }
 
 # filter for testing --------
-
+cache_inventory <- pipload::pip_load_cache_inventory(version = '20240429_2017_01_02_PROD')
+cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') # I have to changed it because I messed up the Y folder :(
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 2: Run pipeline   ---------

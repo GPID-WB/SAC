@@ -27,7 +27,7 @@ save_mp_cache                   <- TRUE
 # Load Packages and Data  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-base_dir <- fs::path("C:/WBG/Git repos/Packages/GPID/PIP/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 withr::with_dir(new = base_dir, 
                 code = {
@@ -64,7 +64,7 @@ base_dir |>
 # }
 
 # filter for testing --------
-cache_inventory <- pipload::pip_load_cache_inventory(version = '20240429_2017_01_02_PROD')
+cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
 cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') # I have to changed it because I messed up the Y folder :(
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

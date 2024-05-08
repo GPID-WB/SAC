@@ -70,7 +70,7 @@ cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Gd_means --------
 
-# Objective: Fetch GD survey means and convert them to daily values
+# Objective: Fetch Group Data survey means and convert them to daily values
 #
 # tar_target(
 #   gd_means, 
@@ -79,10 +79,26 @@ cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD')
 #   iteration = "list"
 # )
 
-gd_means <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
+gd_means_vt <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
 
+## New function:
 
+get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_aux$gdm){
+    dt. <- joyn::joyn(x          = cache_inventory,
+                  y          = gdm,
+                  by         = c("survey_id", "welfare_type"),
+                  match_type = "1:m",
+                  y_vars_to_keep = c("survey_mean_lcu", "pop_data_level"),
+                  keep       = "left")
+    
+    data.table::setorder(dt., cache_id, pop_data_level)
+    gd_means        <- dt.[,.(cache_id, survey_mean_lcu)]
+    gd_means        <- gd_means[,survey_mean_lcu:= survey_mean_lcu*(12/365)]
+    
+    return(gd_means)
+}
 
+gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

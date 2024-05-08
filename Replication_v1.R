@@ -52,7 +52,8 @@ base_dir |>
 
 # filter for testing --------
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
+cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "COL",]
+cache <- pipload::pip_load_cache("COL", version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Check targets nested pipeline   ---------
@@ -79,7 +80,7 @@ cache <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD')
 #   iteration = "list"
 # )
 
-gd_means_vt <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
+gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
 
 ## New function:
 
@@ -99,6 +100,24 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
 }
 
 gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## svy_mean_lcu --------
+
+# Objective:  Local Currency Unit survey mean list 
+# 
+# tar_target(
+#   svy_mean_lcu,
+#   mp_svy_mean_lcu(cache, gd_means)
+# ),
+#
+# Functions used to calculate this:
+# db_compute_survey_mean <- compute_survey_mean
+# compute_survey_mean uses: md_compute_survey_mean, gd_compute_survey_mean,
+#                           gd_compute_survey_mean, id_compute_survey_mean
+
+svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) #Does not work because of size
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

@@ -163,6 +163,38 @@ svy_mean_lcu_sac <- cache|>
   
 # Note: We might be able to do it with group by if cache is in data.table/frame format
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## svy_mean_lcu_table --------
+
+# Objective:  Local Currency Unit survey mean table 
+# 
+# tar_target(
+#   svy_mean_lcu_table,
+#   db_create_lcu_table(
+#     dl        = svy_mean_lcu,
+#     pop_table = dl_aux$pop,
+#     pfw_table = dl_aux$pfw)
+# )
+#
+# Functions used to calculate this:
+# adjust_aux_values
+#
+# Packages needed: tidyfast
+
+
+svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
+                                              pop_table = dl_aux$pop,
+                                              pfw_table = dl_aux$pfw)
+
+svy_mean_lcu_table_sac <- db_create_lcu_table(dl = svy_mean_lcu_sac,
+                                              pop_table = dl_aux$pop,
+                                              pfw_table = dl_aux$pfw) 
+
+
+# Note: Not sure if we need to optimize this function
+
+
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

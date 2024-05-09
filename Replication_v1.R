@@ -46,14 +46,18 @@ base_dir |>
   fs::path("_common.R") |>
   source(echo = FALSE)
 
+## Change gls outdir:
+
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
 #   source(echo = FALSE)
 
 # filter for testing --------
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "COL",]
-cache <- pipload::pip_load_cache("COL", version = '20240326_2017_01_02_PROD') 
+cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "PRY",]
+cache <- pipload::pip_load_cache("PRY", type ="list", version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Check targets nested pipeline   ---------
@@ -112,12 +116,52 @@ gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm =
 # ),
 #
 # Functions used to calculate this:
-# db_compute_survey_mean <- compute_survey_mean
+# mp_svy_mean_lcu <- db_compute_survey_mean <- compute_survey_mean
 # compute_survey_mean uses: md_compute_survey_mean, gd_compute_survey_mean,
 #                           gd_compute_survey_mean, id_compute_survey_mean
 
-svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) #Does not work because of size
+svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
 
+# New function:
+
+db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
+  tryCatch(
+    expr = {
+      
+      # Get distribution type
+      dist_type <- as.character(unique(dt$distribution_type))
+      
+      # Get group mean
+      #if (dist_type=="group"|dist_type=="imputed"){ # For efficiency (?)
+      gd_mean  <- as.character(gd_mean[cache_id==dt$cache_id[1],survey_mean_lcu])
+      #}
+      
+      # Calculate weighted welfare mean
+      dt <- compute_survey_mean[[dist_type]](dt, gd_mean)
+      
+      # Order columns
+      data.table::setcolorder(
+        dt, c(
+          "survey_id", "country_code", "surveyid_year", "survey_acronym",
+          "survey_year", "welfare_type", "survey_mean_lcu"
+        )
+      )
+      
+      return(dt)
+    }, # end of expr section
+    
+    error = function(e) {
+      cli::cli_alert_danger("Survey mean caluclation failed. Returning NULL.")
+      
+      return(NULL)
+    } # end of error
+  ) # End of trycatch
+}
+
+svy_mean_lcu_sac <- cache|>
+  purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
+  
+# Note: We might be able to do it with group by if cache is in data.table/frame format
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

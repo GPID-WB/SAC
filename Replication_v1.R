@@ -119,7 +119,7 @@ gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm =
 # Functions used to calculate this:
 # mp_svy_mean_lcu <- db_compute_survey_mean <- compute_survey_mean
 # compute_survey_mean uses: md_compute_survey_mean, gd_compute_survey_mean,
-#                           gd_compute_survey_mean, id_compute_survey_mean
+#                           id_compute_survey_mean
 
 svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
 
@@ -159,17 +159,72 @@ db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
   ) # End of trycatch
 }
 
-svy_mean_lcu_sac <- cache|>
+svy_mean_lcu_sac <- cache |>
   purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
   
 # Version with cache as table:
 
-svy_mean_lcu_sac_tb <- cache_tb|>
-  collapse::fgroup_by(cache_id, reporting_level, area)|> 
-  collapse::fsummarize(survey_mean_lcu = 
-                         fmean(welfare, w = weight, na.rm = TRUE))|>
-  collapse::fungroup()
+dt <- cache_new[, .(welfare, weight, survey_id, cache_id, country_code, 
+                    surveyid_year, survey_acronym, survey_year, welfare_type,
+                    distribution_type, gd_type, imputation_id, cpi_data_level, 
+                    ppp_data_level, gdp_data_level, pce_data_level, 
+                    pop_data_level, reporting_level, area)]
 
+dt[, survey_mean_lcu := ifelse(distribution_type == "micro",
+                                            fmean(welfare, w = weight, na.rm = TRUE),
+                                            ifelse((distribution_type == "group" | 
+                                               distribution_type == "aggregate"),
+                                            as.character(gd_mean[cache_id==cache_id[1],survey_mean_lcu]),
+                                            NA)),
+                by = .(cache_id,reporting_level, area)]
+
+dt[, survey_mean_lcu := ifelse(distribution_type == "imputed",
+                                      fmean(welfare, w = weight, na.rm = TRUE),
+                               survey_mean_lcu),
+            by = .(cache_id, reporting_level, area, imputation_id)] 
+# 
+# svy_mean_lcu_m_nat <- cache_tb |>
+#   collapse::fsubset(distribution_type == "micro")|>
+#   collapse::fgroup_by(cache_id,reporting_level)|>
+#   collapse::fsummarize(survey_mean_lcu = 
+#                          fmean(welfare, w = weight, na.rm = TRUE))|>
+#   collapse::fungroup()
+# 
+# svy_mean_lcu_sac_tb_mc <- cache_tb |>
+#   collapse::fsubset(distribution_type == "micro")|>
+#   collapse::fgroup_by(cache_id, reporting_level, area)|> 
+#   collapse::fsummarize(survey_mean_lcu_a = 
+#                          fmean(welfare, w = weight, na.rm = TRUE))|>
+#   collapse::fungroup()|>
+#   joyn::joyn(svy_mean_lcu_m_nat, by = c(
+#     "cache_id", "reporting_level"
+#   ),
+#   match_type = "m:1"
+#   )
+# 
+# svy_mean_lcu_sac_tb_im <- cache_tb |>
+#   collapse::fsubset(distribution_type == "imputed")|>
+#   collapse::fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
+#   collapse::fsummarize(survey_mean_lcu_a = 
+#                          fmean(welfare, w = weight, na.rm = TRUE))|>
+#   collapse::fungroup()|>
+#   joyn::joyn(svy_mean_lcu_nat, by = c(
+#     "cache_id", "reporting_level"
+#   ),
+#   match_type = "m:1"
+#   )
+# 
+# svy_mean_lcu_sac_tb_m <- cache_tb |>
+#   collapse::fsubset(distribution_type == "micro")|>
+#   collapse::fgroup_by(cache_id, reporting_level, area)|> 
+#   collapse::fsummarize(survey_mean_lcu_a = 
+#                          fmean(welfare, w = weight, na.rm = TRUE))|>
+#   collapse::fungroup()|>
+#   joyn::joyn(svy_mean_lcu_nat, by = c(
+#     "cache_id", "reporting_level"
+#   ),
+#   match_type = "m:1"
+#   )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_lcu_table --------

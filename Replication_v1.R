@@ -174,8 +174,73 @@ svy_mean_lcu_sac <- cache |>
 svy_mean_lcu_tb <- data.table::rbindlist(svy_mean_lcu_sac, use.names = TRUE)
 
 # New function (version with cache as table):
+# Note: two versions with data.table and pipe.
 
-db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
+db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # computations   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Select variables
+  dt <- cache_tb[, .(welfare, weight, survey_id, cache_id, country_code, 
+                     surveyid_year, survey_acronym, survey_year, welfare_type,
+                     distribution_type, gd_type, imputation_id, cpi_data_level, 
+                     ppp_data_level, gdp_data_level, pce_data_level, 
+                     pop_data_level, reporting_level, area)]
+  
+  # Previous step for imputed distribution type
+  
+  dt[, survey_mean_imp := fmean(welfare, w = weight, na.rm = TRUE),
+     by = .(cache_id, reporting_level, area, imputation_id)]
+  
+  # Mean calculations 
+  
+  dt[, ':=' (survey_mean_lcu_a = ifelse(distribution_type == "micro",
+                                        fmean(welfare, w = weight, na.rm = TRUE),
+                                        ifelse((distribution_type == "group" |
+                                                  distribution_type == "aggregate"),
+                                               as.numeric(gd_mean[cache_id==cache_id[1],
+                                                                  survey_mean_lcu]),
+                                               ifelse(distribution_type == "imputed",
+                                                      fmean(survey_mean_imp, na.rm = TRUE),
+                                                      survey_mean_lcu))),
+             weight_a = fsum(weight)),
+     by = .(cache_id,reporting_level, area)]
+  
+  # Group variables
+  
+  keep_vars <- c("survey_id", "country_code", "surveyid_year", 
+                 "survey_acronym","survey_year", "welfare_type", 
+                 "distribution_type","gd_type","cpi_data_level",
+                 "ppp_data_level", "gdp_data_level", 
+                 "pce_data_level", "pop_data_level")
+  
+  dt_c <- dt |>
+    fgroup_by(cache_id, reporting_level, area)|>
+    fsummarise(across(c(keep_vars, "survey_mean_lcu_a", "weight_a"), funique))|>
+    fungroup()
+  
+  # National mean
+  
+  dt_c[, survey_mean_lcu := fmean(survey_mean_lcu_a, w = weight_a),
+        by = .(cache_id,reporting_level)]
+  
+  # Order columns
+  data.table::setcolorder(
+    dt_c, c(
+      "survey_id", "country_code", "surveyid_year", "survey_acronym",
+      "survey_year", "welfare_type", "survey_mean_lcu"
+    )
+  )
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  return(dt_c)
+
+}
+
+db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # computations   ---------
@@ -187,31 +252,13 @@ db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
                      distribution_type, gd_type, imputation_id, cpi_data_level, 
                      ppp_data_level, gdp_data_level, pce_data_level, 
                      pop_data_level, reporting_level, area)]
-  
-  # Previous step for imputed distribution type
-  
-  # dt[, survey_mean_imp := fmean(welfare, w = weight, na.rm = TRUE),
-  #    by = .(cache_id, reporting_level, area, imputation_id)]
-  
-  # Mean calculations 
-  
-  # dt[, survey_mean_lcu := ifelse(distribution_type == "micro",
-  #                                fmean(welfare, w = weight, na.rm = TRUE),
-  #                                ifelse((distribution_type == "group" |  
-  #                                          distribution_type == "aggregate"),
-  #                                       as.character(gd_mean[cache_id==cache_id[1],
-  #                                                                 survey_mean_lcu]),
-  #                                       ifelse(distribution_type == "imputed",
-  #                                              fmean(survey_mean_imp, na.rm = TRUE),
-  #                                              survey_mean_lcu))),
-  #    by = .(cache_id,reporting_level, area)]
-  
+
   keep_vars <- c("survey_id", "country_code", "surveyid_year", 
                "survey_acronym","survey_year", "welfare_type", 
                "distribution_type","gd_type","cpi_data_level",
                "ppp_data_level", "gdp_data_level", 
                "pce_data_level", "pop_data_level")
-  
+
   # For micro data
   
   dt_m <- dt |>
@@ -219,10 +266,10 @@ db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
     fgroup_by(cache_id, reporting_level, area)|>
     fsummarize(across(keep_vars, funique), 
                survey_mean_lcu_a = fmean(welfare, w = weight, na.rm = TRUE),
-               weight = fsum(weight))|>
+               weight_a = fsum(weight))|>
     fungroup()|>
     fgroup_by(cache_id, reporting_level)|>
-    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight))
+    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight_a))
   
   # For imputations
   
@@ -244,10 +291,10 @@ db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
     fgroup_by(cache_id, reporting_level, area)|>
     fsummarize(across(keep_vars, funique),
                survey_mean_lcu_a = fmean(survey_mean_imp, na.rm = TRUE),
-               weight = fsum(weight))|>
+               weight_a = fsum(weight))|>
     fungroup()|>
     fgroup_by(cache_id, reporting_level)|>
-    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight))
+    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight_a))
   
   dt_g <- dt |>
     fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
@@ -258,11 +305,13 @@ db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
                y_vars_to_keep = "survey_mean_lcu",
                match_type = "m:1", keep = "left", 
                reportvar = FALSE)|>
+    fmutate(survey_mean_lcu_a = survey_mean_lcu)|>
     fsummarize(across(c(keep_vars, "cache_id", "reporting_level",
-                        "area", "survey_mean_lcu"), funique))|>
+                        "area", "survey_mean_lcu" ,"survey_mean_lcu_a"), funique),
+               weight_a = fsum(weight))|>
     fungroup()
   
-  dt_c <- rbind(dt_m, dt_i, dt_g, fill =TRUE)
+  dt_c <- rbind(dt_m, dt_i, dt_g)
   # Note: We can eliminate dt_g if needed.
   
   # Order columns

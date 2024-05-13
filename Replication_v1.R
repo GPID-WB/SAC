@@ -170,8 +170,8 @@ db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
 svy_mean_lcu_sac <- cache |>
   purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
 
-# Replicate:
-svy_mean_lcu_tb <- data.table::rbindlist(svy_mean_lcu_sac, use.names = TRUE)
+# Replicate outcome on table format:
+svy_mean_lcu_tb <- data.table::rbindlist(svy_mean_lcu_tar, use.names = TRUE)
 
 # New function (version with cache as table):
 # Note: two versions with data.table and pipe.
@@ -329,6 +329,8 @@ db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
 
 }
 
+svy_mean_lcu_sac_dt <- db_compute_survey_mean_sac_dt(cache_tb = cache_tb, gd_mean = gd_means_sac)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_lcu_table --------
 
@@ -352,12 +354,151 @@ svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw)
 
-svy_mean_lcu_table_sac <- db_create_lcu_table(dl = svy_mean_lcu_sac,
+
+# New function to add auxiliary data (pwf and pop) :
+# Note: Not many changes for now... (only no rbind at the beginning)
+
+db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # computations   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  # ---- Merge with PFW ----
+  
+  # Select columns
+  pfw_table <-
+    pfw_table[, c(
+      "wb_region_code", "pcn_region_code",
+      "country_code", "survey_coverage",
+      "surveyid_year", "survey_acronym",
+      "reporting_year", "survey_comparability",
+      "display_cp", "survey_time"
+    )]
+  
+  # Merge LCU table with PFW (left join)
+  dt <- joyn::joyn(dt, pfw_table,
+                   by = c(
+                     "country_code",
+                     "surveyid_year",
+                     "survey_acronym"
+                   ),
+                   match_type = "m:1"
+  )
+  
+  if (nrow(dt[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure PFW table is up to date"
+    rlang::abort(c(
+      msg,
+      i = hint,
+      i = "Make sure .dta data is up to date by running pipdp"
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt <- dt[
+    .joyn != "y" 
+  ][, .joyn := NULL]
+  
+  #--------- Merge with POP ---------
+  
+  # Create nested POP table
+  pop_table$pop_domain <- NULL
+  pop_nested <- pop_table %>%
+    tidyfast::dt_nest(country_code, pop_data_level, .key = "data")
+  
+  # Merge dt with pop_nested (add survey_pop)
+  dt <- joyn::joyn(dt, pop_nested,
+                   by = c("country_code", "pop_data_level"),
+                   match_type = "m:1"
+  )
+  #NOTE DC: Should we use area to include rural/urban population?
+  
+  if (nrow(dt[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  dt <- dt[
+    .joyn != "y"
+  ][, .joyn := NULL]
+  
+  # Transform survey_year to numeric
+  dt[
+    ,
+    survey_year := as.numeric(survey_year)
+  ]
+  
+  # Adjust population values for surveys spanning two calender years
+  dt$survey_pop <-
+    purrr::map2_dbl(dt$survey_year, dt$data,
+                    adjust_aux_values,
+                    value_var = "pop"
+    )
+  # Note DC: check how to optimize so we don't need to use lists.
+  
+  # Remove nested data column
+  dt$data <- NULL
+  
+  # Merge with pop_table (add reporting_pop)
+  dt <- joyn::joyn(dt, pop_table,
+                   by = c(
+                     "country_code",
+                     "reporting_year = year",
+                     "pop_data_level"
+                   ),
+                   match_type = "m:1"
+  )
+  
+  if (nrow(dt[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  dt <- dt[
+    .joyn != "y" # All country/years for which we don't have data... its ox.
+  ][, .joyn := NULL]
+  
+  
+  data.table::setnames(dt, "pop", "reporting_pop")
+  
+  
+  # ---- Finalize table ----
+  
+  # Sort rows
+  data.table::setorder(dt, country_code, surveyid_year, survey_acronym)
+  
+  # Order columns
+  data.table::setcolorder(
+    dt, c(
+      "survey_id", "cache_id", "country_code", "surveyid_year", "survey_acronym",
+      "survey_year", "welfare_type", "survey_mean_lcu", "survey_pop",
+      "reporting_pop"
+    )
+  )
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  return(dt)
+
+}
+
+svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac_dt,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw) 
-
-
-# Note: We might not need to optimize this function if we start with a table
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_ppp_table --------

@@ -675,11 +675,34 @@ db_create_dsm_table_sac <- function(lcu_table,
 
 # It depends of:
 # dl_dist_stats <- svy_mean_ppp_table
+#
+# Functions needed to calculate this:
+# compute_dist_stats, get_dist_stats_by_level,
+# gd_dist_stats, id_dist_stats, md_dist_stats,
+# get_synth_vector, mean_over_id
+#
+# Missing cache_ids!
+
+dl_dist_stats_tar <- mp_dl_dist_stats(dt         = cache,
+                                      mean_table = svy_mean_ppp_table,
+                                      pop_table  = dl_aux$pop,
+                                      cache_id   = cache_ids, 
+                                      ppp_year   = py)
 
 
+dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats,
+                                          dsm_table = svy_mean_ppp_table, 
+                                          crr_inv   = cache_inventory)
+  
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Prod_svy_estimation   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # It depends of: 
 # dt_dist_stats
+
+dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table, 
+                                                             dist_table = dt_dist_stats,
+                                                             gdp_table = dl_aux$gdp,
+                                                             pce_table = dl_aux$pce) 
+

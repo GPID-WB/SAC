@@ -522,9 +522,7 @@ svy_mean_ppp_table_tar <- db_create_dsm_table(lcu_table = svy_mean_lcu_table_tar
 
 # New function:
 
-db_create_dsm_table_sac <- function(lcu_table,
-         cpi_table,
-         ppp_table) {
+db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   
   #--------- Merge with CPI ---------
@@ -655,11 +653,39 @@ db_create_dsm_table_sac <- function(lcu_table,
              )
   ]
   
-  # Add aggregated mean for surveys split by Urban/Rural # Need to change this!
-  dt <- add_aggregated_mean(dt)
+  # Add aggregated mean for surveys split by Urban/Rural 
   
+  if(any(dt$is_used_for_aggregation==TRUE)){
+    # Select rows w/ non-national pop_data_level
+    dt_sub <- dt[is_used_for_aggregation == TRUE]
+    
+    # Compute aggregated mean (weighted population average)
+    dt_agg <- dt_sub[, ":=" (reporting_pop           = fsum(reporting_pop),
+                             survey_mean_lcu = fmean(x = survey_mean_lcu,
+                                                     w = reporting_pop),
+                             survey_mean_ppp = fmean(x = survey_mean_ppp,
+                                                     w = reporting_pop),
+                             ppp                     = NA,  
+                             cpi                     = NA,
+                             pop_data_level          = "national", 
+                             gdp_data_level          = "national",
+                             pce_data_level          = "national",
+                             cpi_data_level          = "national",
+                             ppp_data_level          = "national",
+                             reporting_level         = "national"),
+                     by = .(survey_id, cache_id) ]
+    
+    
+    dt_agg <- dt_agg |>
+      fgroup_by(survey_id, cache_id)|>
+      fsummarise(across(names(dt)[!names(dt) %in% c("survey_id", "cache_id")], funique))|>
+      fungroup()
+    
+    dt <- rbind(dt_agg, dt)
+  }
+
   # Sort rows
-  data.table::setorder(dt, survey_id)
+  data.table::setorder(dt, survey_id, cache_id)
   
   # change factors to characters
   nn <- names(dt[, .SD, .SDcols = is.factor])
@@ -668,6 +694,10 @@ db_create_dsm_table_sac <- function(lcu_table,
   
   return(dt)
 }
+
+svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
+                                              cpi_table = dl_aux$cpi,
+                                              ppp_table = dl_aux$ppp)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

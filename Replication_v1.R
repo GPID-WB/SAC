@@ -61,6 +61,11 @@ cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01
 cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "NGA",]
 cache <- pipload::pip_load_cache("NGA", type="list", version = '20240326_2017_01_02_PROD') 
 cache_tb <- pipload::pip_load_cache("NGA", version = '20240326_2017_01_02_PROD') 
+cache_ids <- get_cache_id(cache_inventory) 
+
+# Alternative:
+# cache_dir <- get_cache_files(cache_inventory)
+# cache_ids <- names(cache_dir)
   
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Check targets nested pipeline   ---------

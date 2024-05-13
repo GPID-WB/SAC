@@ -19,7 +19,8 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+#base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/01.personal/wb535623/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -48,8 +49,8 @@ base_dir |>
 
 ## Change gls outdir:
 
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -559,7 +560,7 @@ db_create_dsm_table_sac <- function(lcu_table,
   }
   
   dt <- dt[
-    .joyn != "y" # This is unnecessary data in cpi table... should we have it?
+    .joyn != "y" 
   ][, .joyn := NULL]
   
   #--------- Merge with PPP ---------
@@ -606,38 +607,21 @@ db_create_dsm_table_sac <- function(lcu_table,
     wbpip::deflate_welfare_mean(
       welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
     )
+  # Note: Do we need the function? Faster without it?
+  # Example: 
+  # dt <- dt|>
+  #   fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
   
   
-  #--------- Add comparable spell --------- ## Change this. 
+  #--------- Add comparable spell --------- ## 
   
-  # dl <- split(dt, list(dt$country_code, dt$survey_comparability))
-  # dl <- lapply(dl, function(x) {
-  #   if (nrow(x) == 1) {
-  #     x$comparable_spell <- x$reporting_year
-  #   } else {
-  #     x$comparable_spell <-
-  #       sprintf(
-  #         "%s - %s",
-  #         x$reporting_year[1],
-  #         x$reporting_year[length(x$reporting_year)]
-  #       )
-  #   }
-  #   return(x)
-  # })
-  # dt <- data.table::rbindlist(dl)
-  
-  dt |>
-    fgroup_by(country_code, survey_comparability) |>
-    fmutate(
-      comparable_spell = if (n() == 1) {
-        as.character(reporting_year)
-      } else {
-        sprintf("%s - %s", 
-                first(reporting_year), 
-                last(reporting_year))
-      }
-    ) |>
-    fungroup()
+  dt[, comparable_spell := ifelse(.N == 1,
+                                        as.character(reporting_year),
+                                        sprintf("%s - %s",
+                                                data.table::first(reporting_year),
+                                                data.table::last(reporting_year))),
+            by = c("country_code", "survey_comparability")
+  ]
   
   #--------- Finalize table ---------
   
@@ -671,7 +655,7 @@ db_create_dsm_table_sac <- function(lcu_table,
              )
   ]
   
-  # Add aggregated mean for surveys split by Urban/Rural
+  # Add aggregated mean for surveys split by Urban/Rural # Need to change this!
   dt <- add_aggregated_mean(dt)
   
   # Sort rows

@@ -49,10 +49,8 @@ base_dir |>
 
 ## Change gls outdir:
 
-<<<<<<< HEAD
-=======
+
 #gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
->>>>>>> main
 gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
@@ -61,16 +59,11 @@ gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # filter for testing --------
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-<<<<<<< HEAD
-cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "PRY",]
-cache <- pipload::pip_load_cache("PRY", type="list", version = '20240326_2017_01_02_PROD') 
-cache_tb <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
-=======
 cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "NGA",]
 cache <- pipload::pip_load_cache("NGA", type="list", version = '20240326_2017_01_02_PROD') 
 cache_tb <- pipload::pip_load_cache("NGA", version = '20240326_2017_01_02_PROD') 
 cache_ids <- get_cache_id(cache_inventory) 
->>>>>>> main
+
 
 # Alternative:
 # cache_dir <- get_cache_files(cache_inventory)
@@ -106,20 +99,6 @@ gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_
 ## New function:
 
 get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_aux$gdm){
-<<<<<<< HEAD
-  dt. <- joyn::joyn(x          = cache_inventory,
-                    y          = gdm,
-                    by         = c("survey_id", "welfare_type"),
-                    match_type = "1:m",
-                    y_vars_to_keep = c("survey_mean_lcu", "pop_data_level"),
-                    keep       = "left")
-  
-  data.table::setorder(dt., cache_id, pop_data_level)
-  gd_means        <- dt.[,.(cache_id, survey_mean_lcu)]
-  gd_means        <- gd_means[,survey_mean_lcu:= survey_mean_lcu*(12/365)]
-  
-  return(gd_means)
-=======
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # computations   ---------
@@ -140,7 +119,6 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
     # Return   ---------
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     return(gd_means)
->>>>>>> main
 }
 
 gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
@@ -158,19 +136,12 @@ gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm =
 # Functions used to calculate this:
 # mp_svy_mean_lcu <- db_compute_survey_mean <- compute_survey_mean
 # compute_survey_mean uses: md_compute_survey_mean, gd_compute_survey_mean,
-<<<<<<< HEAD
-#                           gd_compute_survey_mean, id_compute_survey_mean
-
-svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
-
-# New function:
-=======
 #                           id_compute_survey_mean
 
 svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
 
 # New function (version with list):
->>>>>>> main
+
 
 db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
   tryCatch(
@@ -206,22 +177,6 @@ db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
   ) # End of trycatch
 }
 
-<<<<<<< HEAD
-svy_mean_lcu_sac <- cache|>
-  purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
-
-# Version with cache as table:
-
-svy_mean_lcu_sac_tb <- cache_tb|>
-  collapse::fgroup_by(cache_id, reporting_level, area)|> 
-  collapse::fsummarize(survey_mean_lcu = 
-                         fmean(welfare, w = weight, na.rm = TRUE))|>
-  collapse::fungroup()
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## svy_mean_lcu_table --------
-=======
 svy_mean_lcu_sac <- cache |>
   purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
 
@@ -408,7 +363,7 @@ svy_mean_lcu_sac_dt <- db_compute_survey_mean_sac_dt(cache_tb = cache_tb, gd_mea
 svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw)
->>>>>>> main
+
 
 # Objective:  Local Currency Unit survey mean table 
 # 

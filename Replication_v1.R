@@ -647,7 +647,21 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   dt$is_interpolated <- FALSE
   
   # Add is_used_for_line_up column
-  dt <- create_line_up_check(dt)
+  dt_lu <- dt[area=="national"][, n_rl := .N, by = cache_id]
+  
+  dt_lu <- create_line_up_check(dt_lu)
+  
+  dt <- joyn::joyn(dt, dt_lu,
+                by = c("cache_id", "reporting_level", "area"),
+                match_type = "m:1",
+                y_vars_to_keep = "is_used_for_line_up"
+  )
+  
+  dt[is.na(is_used_for_line_up),is_used_for_line_up := FALSE]
+  
+  dt <- dt[
+    .joyn != "y" 
+  ][, .joyn := NULL]
   
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]

@@ -621,15 +621,15 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   #--------- Deflate welfare mean ---------
   
   # svy_mean_ppp = survey_mean_lcu / cpi / ppp
-  dt$survey_mean_ppp <-
-    wbpip::deflate_welfare_mean(
-      welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
-    )
+  # dt$survey_mean_ppp <-
+  #   wbpip::deflate_welfare_mean(
+  #     welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
+  #   )
   # Note: Do we need the function? Faster without it?
   # Example: 
-  # dt <- dt|>
-  #   fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
-  
+  dt <- dt|>
+    fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+
   
   #--------- Add comparable spell --------- ## 
   
@@ -638,8 +638,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                                         sprintf("%s - %s",
                                                 data.table::first(reporting_year),
                                                 data.table::last(reporting_year))),
-            by = c("country_code", "survey_comparability")
-  ]
+            by = c("country_code", "area", "survey_comparability")
+  ] # Need to add area level
   
   #--------- Finalize table ---------
   

@@ -667,6 +667,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                "reporting_pop", "ppp", "cpi", "pop_data_level",
                "gdp_data_level", "pce_data_level",
                "cpi_data_level", "ppp_data_level", "reporting_level",
+               "area",
                "distribution_type", "gd_type",
                "is_interpolated", "is_used_for_line_up",
                "is_used_for_aggregation", "display_cp"

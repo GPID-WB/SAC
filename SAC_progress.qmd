@@ -16,7 +16,6 @@ Reproduce survey_means, dist_stats, and prod_svy_estimation.
 
 ```{mermaid}
 %%| fig-width: 6.5
-
 flowchart LR
 
 svy[survey_means] --> dist[dist_stats]

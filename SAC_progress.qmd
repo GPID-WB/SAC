@@ -1,0 +1,155 @@
+---
+title: "SAC Progress"
+author: "Diana and Giorgia"
+format: 
+  revealjs
+---
+
+## Objective Task
+
+Improve PIP pipeline using Split-Apply-Combine (SAC) techniques.
+
+> First goal: 
+Reproduce survey_means, dist_stats, and prod_svy_estimation.
+
+## Relationship between files
+
+```{mermaid}
+%%| fig-width: 6.5
+
+flowchart LR
+
+svy[survey_means] --> dist[dist_stats]
+cache --> svy
+aux_gdm --> svy
+aux_pop --> svy
+aux_pfw --> svy
+aux_cpi --> svy
+aux_ppp --> svy
+dist --> est[prod_svy_estimation]
+```
+
+## Variables from inputs 
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**cache**:
+
+- survey_id
+- cache_id
+- country_code
+- survey_acronym
+- surveyid_year
+- survey_year
+- welfare_type
+:::
+
+::: {.column width="50%"}
+
+- pop_data_level 
+- gdp_data_level
+- pce_data_level
+- cpi_data_level
+- ppp_data_level
+- reporting_level
+- distribution_type
+- gd_type
+:::
+
+::::
+
+## Variables from inputs
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**pfw**: 
+
+ - *wb_region_code*
+ - *pcn_region_code*
+ - country_code
+ - survey_acronym
+ - *survey_coverage*
+ 
+:::
+
+::: {.column width="50%"}
+
+ - *survey_comparability*
+ - surveyid_year
+ - *reporting_year*
+ - survey_year
+ - survey_time
+ - welfare_type
+ - *display_cp*
+
+:::
+
+::::
+
+## Variables from inputs
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+**cpi**: 
+
+ - country_code
+ - survey_acronym
+ - surveyid_year
+ - cpi_data_level
+ 
+:::
+
+::: {.column width="50%"}
+
+**ppp**: 
+
+ - country_code
+ - ppp_data_level
+ 
+**gdm**: 
+
+ - *survey_mean_lcu (group)*
+ - cache_id
+ 
+**pop**: 
+
+ - pop_data_level
+ 
+:::
+
+::::
+
+## New variables
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+- survey_mean_lcu     
+- survey_mean_ppp
+- comparable_spell
+- reporting_pop
+- ppp
+- cpi
+
+:::
+
+::: {.column width="50%"}
+
+- is_interpolated
+- is_used_for_line_up
+- is_used_for_aggregation
+
+:::
+
+::::
+
+## Dist_stats
+
+

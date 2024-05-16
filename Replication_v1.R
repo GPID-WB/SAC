@@ -14,13 +14,13 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240326"  # I have to changed it because I messed up the Y folder :(
+release            <- "20240326"  
 identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
 #base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-base_dir <- fs::path("E:/01.personal/wb535623/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -189,9 +189,12 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
     fungroup()
   
   # Modify the area variable for imputed or group
+  
   levels(dt_c$area)[levels(dt_c$area)==""] <- "national" 
   
-  # dt[, area := ifelse(reporting_level!=area, reporting_level, area)] # Need to fix this if not same as reference_level
+  # Need to fix this if not same as reference_level (aggregate)
+  
+  # dt_c[, area := ifelse(reporting_level!=area, reporting_level, area)] 
   
   # National mean
   
@@ -205,7 +208,7 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
     rename(survey_mean_lcu = mean_nat)|>
     fmutate(area = factor("national"))
               
-  dt_c <- rbind(dt_c, dt_nat)
+  dt_c <- rowbind(dt_c, dt_nat)
   
   # Order columns
   data.table::setcolorder(
@@ -223,7 +226,7 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
 }
 
 # This version does not include the change in area
-db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
+db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # computations   ---------
@@ -245,40 +248,26 @@ db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
   # For micro data
   
   dt_m <- dt |>
-    fsubset(distribution_type == "micro")|>
+    fsubset(distribution_type=="imputed" | distribution_type == "micro")|> 
+    fgroup_by(cache_id, reporting_level, area,
+              imputation_id)|> 
+    fsummarise(survey_mean_imp = fmean(welfare, w = weight, na.rm = TRUE))|>
     fgroup_by(cache_id, reporting_level, area)|>
     fsummarize(across(keep_vars, funique), 
-               survey_mean_lcu_a = fmean(welfare, w = weight, na.rm = TRUE),
-               weight_a = fsum(weight))|>
-    fungroup()|>
+               survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
+               weight = fsum(weight))|>
+    fungroup()
+  
+  dt_m_nat <- dt_m |>
+    fsubset(area != "national")|>
     fgroup_by(cache_id, reporting_level)|>
-    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight_a))
-  
-  # For imputations
-  
-  imp_mean <- dt |>
-    fsubset(distribution_type=="imputed")|> 
-    fgroup_by(cache_id, reporting_level, 
-              imputation_id)|> # Should I include area here?
-    fsummarise(survey_mean_imp = fmean(welfare, w = weight, na.rm = TRUE))
-  
-  dt_i <- dt |>
-    joyn::joyn(imp_mean,
-               by = c(
-      "cache_id","reporting_level",
-      "imputation_id"
-    ),
-    y_vars_to_keep = "survey_mean_imp",
-    match_type = "m:1", reportvar = FALSE)|>
-    fsubset(distribution_type == "imputed")|>
-    fgroup_by(cache_id, reporting_level, area)|>
-    fsummarize(across(keep_vars, funique),
-               survey_mean_lcu_a = fmean(survey_mean_imp, na.rm = TRUE),
-               weight_a = fsum(weight))|>
+    fsummarise(mean_nat = fmean(survey_mean_lcu, w = weight),
+               weight = fsum(weight),
+               across(c(keep_vars), funique))|>
     fungroup()|>
-    fgroup_by(cache_id, reporting_level)|>
-    fmutate(survey_mean_lcu = fmean(survey_mean_lcu_a, w = weight_a))
-  
+    rename(survey_mean_lcu = mean_nat)|>
+    fmutate(area = factor("national"))
+ 
   dt_g <- dt |>
     fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
     joyn::joyn(gd_mean,
@@ -294,7 +283,7 @@ db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
                weight_a = fsum(weight))|>
     fungroup()
   
-  dt_c <- rbind(dt_m, dt_i, dt_g)
+  dt_c <- rbind(dt_m, dt_m_nat, dt_g)
   # Note: We can eliminate dt_g if needed.
   
   # Order columns
@@ -313,6 +302,9 @@ db_compute_survey_mean_sac_pipe <- function(cache_tb, gd_mean = NULL) {
 }
 
 svy_mean_lcu_sac_dt <- db_compute_survey_mean_sac_dt(cache_tb = cache_tb, gd_mean = gd_means_sac)
+
+
+svy_mean_lcu_sac_col <- db_compute_survey_mean_sac_col(cache_tb = cache_tb, gd_mean = gd_means_sac)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_lcu_table --------

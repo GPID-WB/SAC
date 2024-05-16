@@ -138,45 +138,6 @@ gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm =
 
 svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
 
-# New function (version with list):
-
-db_compute_survey_mean_sac <- function(dt, gd_mean = NULL) {
-  tryCatch(
-    expr = {
-      
-      # Get distribution type
-      dist_type <- as.character(unique(dt$distribution_type))
-      
-      # Get group mean
-      #if (dist_type=="group"|dist_type=="imputed"){ # For efficiency (?)
-      gd_mean  <- as.character(gd_mean[cache_id==dt$cache_id[1],survey_mean_lcu])
-      #}
-      
-      # Calculate weighted welfare mean
-      dt <- compute_survey_mean[[dist_type]](dt, gd_mean)
-      
-      # Order columns
-      data.table::setcolorder(
-        dt, c(
-          "survey_id", "country_code", "surveyid_year", "survey_acronym",
-          "survey_year", "welfare_type", "survey_mean_lcu"
-        )
-      )
-      
-      return(dt)
-    }, # end of expr section
-    
-    error = function(e) {
-      cli::cli_alert_danger("Survey mean caluclation failed. Returning NULL.")
-      
-      return(NULL)
-    } # end of error
-  ) # End of trycatch
-}
-
-svy_mean_lcu_sac <- cache |>
-  purrr::map(\(x) db_compute_survey_mean_sac(dt = x, gd_mean = gd_means_sac))
-
 # Replicate outcome on table format:
 svy_mean_lcu_tb <- data.table::rbindlist(svy_mean_lcu_tar, use.names = TRUE)
 

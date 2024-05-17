@@ -5,23 +5,6 @@
   pop_table <- dl_aux$pop
   ppp_year <- py
   
-  # 1. Unique means ----
-  mean_table <- mean_table |>
-    fselect(cache_id, surveyid_year, distribution_type, reporting_level, area, 
-            survey_mean_ppp, reporting_pop)
-  
-  # 2. Joyn with means ----  
-  cache_dt <- cache_tb |>
-    fselect(cache_id, country_code, surveyid_year, distribution_type, imputation_id,
-            reporting_level, pop_data_level, area, welfare, weight, welfare_ppp) |>
-    joyn::joyn(mean_table,
-               by=c("cache_id", "surveyid_year", "reporting_level", "area"), # by "area" needs to be added back here 
-               y_vars_to_keep = "survey_mean_ppp",
-               match_type = "m:1",
-               reportvar = FALSE,
-               keep = "left")
-  
-  
   # 3. Micro Data ----
   ## 3.1 Area Dist Estimates ----
   # welfare needs to be ordered at the area level:
@@ -81,28 +64,27 @@
                y_vars_to_keep = c("survey_mean_ppp"),
                match_type = "m:1",
                reportvar = FALSE,
-               keep = "left") |>
+               keep = "left") |> # sort = FALSE
     roworder(cache_id, country_code, surveyid_year, distribution_type, 
              reporting_level, imputation_id, welfare_ppp) |>
     fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
               reporting_level, imputation_id)|> # no area so dist stat are the sum of both
-    fsummarise(res = list(wbpip:::md_compute_dist_stats(  
+    fsummarise(res = list(wbpip:::md_compute_dist_stats(  # md_ and then use function by function
       welfare = welfare_ppp,
       weight = weight,
       mean = unique(survey_mean_ppp))))|>
-      _[, c(.SD, .( # using _ because we are using native pipe
+      _[, c(.SD, .( # using _ because we are using native pipe 
       Statistic = names(unlist(res)), 
       Value = unlist(res))),
       by = .(cache_id, country_code, surveyid_year, imputation_id)] |>
     dcast(cache_id + country_code + surveyid_year + imputation_id ~ Statistic, 
-          value.var = "Value")|> # using collapse because grouping should be faster
+          value.var = "Value")|> 
     fgroup_by(cache_id, country_code, surveyid_year)|>
-    fsummarise(across(gini:quantiles9, fmean))
+    fsummarise(across(gini:quantiles9, fmean)) # using collapse because grouping should be faster
     
 
   
   # 5. Group Data -----
-  ## Add pop table ----
   gd_dt <- 
     cache_dt |>
     fselect(cache_id, country_code, surveyid_year, distribution_type, imputation_id,

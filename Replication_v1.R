@@ -210,11 +210,16 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
               
   dt_c <- rowbind(dt_c, dt_nat)
   
+  # Order rows
+  dt_c <- dt_c|>
+    roworder(survey_id, country_code, surveyid_year, survey_acronym,
+             survey_year, welfare_type)
+  
   # Order columns
   data.table::setcolorder(
     dt_c, c(
       "survey_id", "country_code", "surveyid_year", "survey_acronym",
-      "survey_year", "welfare_type", "survey_mean_lcu"
+      "survey_year", "welfare_type"
     )
   )
 
@@ -244,29 +249,42 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
                "distribution_type","gd_type","cpi_data_level",
                "ppp_data_level", "gdp_data_level", 
                "pce_data_level", "pop_data_level")
-
+  
+  # Modify the area variable for imputed or group
+  
+  levels(dt$area)[levels(dt$area)==""] <- "national" 
+  
+  # Need to fix this if not same as reference_level (aggregate)
+  
+  # dt[, area := ifelse(reporting_level!=area, reporting_level, area)] 
+  
   # For micro data
   
   dt_m <- dt |>
     fsubset(distribution_type=="imputed" | distribution_type == "micro")|> 
     fgroup_by(cache_id, reporting_level, area,
               imputation_id)|> 
-    fsummarise(survey_mean_imp = fmean(welfare, w = weight, na.rm = TRUE))|>
+    fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
+               weight = fsum(weight),
+               across(keep_vars, funique))|>
     fgroup_by(cache_id, reporting_level, area)|>
-    fsummarize(across(keep_vars, funique), 
-               survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
+    fsummarize(across(c(keep_vars), funique), 
+               survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
                weight = fsum(weight))|>
     fungroup()
   
-  dt_m_nat <- dt_m |>
+  # For national
+  
+  dt_nat <- dt_m |>
     fsubset(area != "national")|>
     fgroup_by(cache_id, reporting_level)|>
-    fsummarise(mean_nat = fmean(survey_mean_lcu, w = weight),
+    fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight),
                weight = fsum(weight),
                across(c(keep_vars), funique))|>
     fungroup()|>
-    rename(survey_mean_lcu = mean_nat)|>
     fmutate(area = factor("national"))
+  
+  # For group
  
   dt_g <- dt |>
     fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
@@ -277,20 +295,25 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
                y_vars_to_keep = "survey_mean_lcu",
                match_type = "m:1", keep = "left", 
                reportvar = FALSE)|>
-    fmutate(survey_mean_lcu_a = survey_mean_lcu)|>
+    #fmutate(survey_mean_lcu = as.numeric(survey_mean_lcu))|>
     fsummarize(across(c(keep_vars, "cache_id", "reporting_level",
-                        "area", "survey_mean_lcu" ,"survey_mean_lcu_a"), funique),
-               weight_a = fsum(weight))|>
+                        "area", "survey_mean_lcu"), funique),
+               weight = fsum(weight))|>
     fungroup()
   
-  dt_c <- rbind(dt_m, dt_m_nat, dt_g)
+  dt_c <- collapse::rowbind(dt_m, dt_nat, dt_g)
   # Note: We can eliminate dt_g if needed.
+  
+  # Order rows
+  dt_c <- dt_c|>
+    roworder(survey_id, country_code, surveyid_year, survey_acronym,
+             survey_year, welfare_type)
   
   # Order columns
   data.table::setcolorder(
     dt_c, c(
       "survey_id", "country_code", "surveyid_year", "survey_acronym",
-      "survey_year", "welfare_type", "survey_mean_lcu"
+      "survey_year", "welfare_type"
     )
   )
 

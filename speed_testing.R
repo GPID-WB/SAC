@@ -4,8 +4,8 @@ bench <- microbenchmark::microbenchmark(
   dt = {
     new_value = db_compute_survey_mean_sac_dt(cache_tb = cache_tb, gd_mean = gd_mean)
     },
-  pipe = {
-    old_value = db_compute_survey_mean_sac_pipe(cache_tb = cache_tb, gd_mean = gd_mean)
+  collapse = {
+    old_value = db_compute_survey_mean_sac_col(cache_tb = cache_tb, gd_mean = gd_mean)
     }
 )
 if (requireNamespace("highcharter")) {

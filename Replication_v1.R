@@ -162,6 +162,14 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
                  "ppp_data_level", "gdp_data_level", 
                  "pce_data_level", "pop_data_level")
   
+  # Modify the area variable for imputed or group
+  
+  levels(dt$area)[levels(dt$area)==""] <- "national" 
+  
+  # Need to fix this if not same as reference_level (aggregate)
+  
+  # dt[, area := ifelse(reporting_level!=area, reporting_level, area)] 
+  
   # Previous step for imputed distribution type
   
   dt[, survey_mean_imp := fmean(welfare, w = weight, na.rm = TRUE),
@@ -169,17 +177,18 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
   
   # Mean calculations 
   
-  dt[, ':=' (survey_mean_lcu = ifelse(distribution_type == "micro",
-                                        fmean(welfare, w = weight, na.rm = TRUE),
+  dt[, ':=' (survey_mean_lcu = ifelse(distribution_type == "micro" | 
+                                        distribution_type == "imputed",
+                                        fmean(survey_mean_imp, na.rm = TRUE),
                                         ifelse((distribution_type == "group" |
                                                   distribution_type == "aggregate"),
                                                as.numeric(gd_mean[cache_id==cache_id[1],
                                                                   survey_mean_lcu]),
-                                               ifelse(distribution_type == "imputed",
-                                                      fmean(survey_mean_imp, na.rm = TRUE),
-                                                      survey_mean_lcu))),
+                                                      NA_integer_)),
              weight = fsum(weight)),
      by = .(cache_id,reporting_level, area)]
+  
+  # Note: need to make a check for no NA values
   
   # Group variables
   
@@ -187,14 +196,6 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
     fgroup_by(cache_id, reporting_level, area)|>
     fsummarise(across(c(keep_vars, "survey_mean_lcu", "weight"), funique))|>
     fungroup()
-  
-  # Modify the area variable for imputed or group
-  
-  levels(dt_c$area)[levels(dt_c$area)==""] <- "national" 
-  
-  # Need to fix this if not same as reference_level (aggregate)
-  
-  # dt_c[, area := ifelse(reporting_level!=area, reporting_level, area)] 
   
   # National mean
   
@@ -262,8 +263,7 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
   
   dt_m <- dt |>
     fsubset(distribution_type=="imputed" | distribution_type == "micro")|> 
-    fgroup_by(cache_id, reporting_level, area,
-              imputation_id)|> 
+    fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
     fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
                weight = fsum(weight),
                across(keep_vars, funique))|>
@@ -278,7 +278,7 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
   dt_nat <- dt_m |>
     fsubset(area != "national")|>
     fgroup_by(cache_id, reporting_level)|>
-    fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight),
+    fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
                weight = fsum(weight),
                across(c(keep_vars), funique))|>
     fungroup()|>
@@ -294,8 +294,7 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
                ),
                y_vars_to_keep = "survey_mean_lcu",
                match_type = "m:1", keep = "left", 
-               reportvar = FALSE)|>
-    #fmutate(survey_mean_lcu = as.numeric(survey_mean_lcu))|>
+               reportvar = FALSE, sort = FALSE)|>
     fsummarize(across(c(keep_vars, "cache_id", "reporting_level",
                         "area", "survey_mean_lcu"), funique),
                weight = fsum(weight))|>
@@ -740,7 +739,9 @@ dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # It depends of: 
-# dt_dist_stats
+# svy_mean_ppp_table, dt_dist_stats
+
+# Note: No need of SAC
 
 dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table, 
                                                              dist_table = dt_dist_stats,

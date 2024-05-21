@@ -231,7 +231,7 @@ db_compute_survey_mean_sac_dt <- function(cache_tb, gd_mean = NULL) {
 
 }
 
-# This version does not include the change in area
+
 db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -614,7 +614,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                                                 data.table::first(reporting_year),
                                                 data.table::last(reporting_year))),
             by = c("country_code", "area", "survey_comparability")
-  ] # Need to add area level
+  ] 
   
   #--------- Finalize table ---------
   

@@ -32,7 +32,7 @@ max_year_aggregate <- 2022
 base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Load Packages and Data  ---------
+# 0. Load Packages and Data  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 withr::with_dir(new = base_dir, 
@@ -160,17 +160,17 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   
   dt_g <- dt |>
     fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
-    joyn::joyn(gd_mean,
+    joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                by = c(
-                 "cache_id"
+                 "cache_id", "pop_data_level"
                ),
                y_vars_to_keep = "survey_mean_lcu",
                match_type = "m:1", keep = "left", 
                reportvar = FALSE, sort = FALSE)|>
-    fsummarize(across(c(keep_vars, "cache_id", "reporting_level",
-                        "area", "survey_mean_lcu"), funique),
-               weight = fsum(weight))|>
-    fungroup()
+    fgroup_by(cache_id, reporting_level, pop_data_level)|>
+    fsummarize(across(c(keep_vars[!(keep_vars %in% "pop_data_level")], "area",  
+                        "survey_mean_lcu"), funique),
+               weight = fsum(weight))
   
   dt_c <- collapse::rowbind(dt_m, dt_nat, dt_g)
   # Note: We can eliminate dt_g if needed.
@@ -194,7 +194,6 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   return(dt_c)
   
 }
-
 
 svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, gd_mean = gd_means_sac)
 

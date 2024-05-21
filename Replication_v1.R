@@ -58,9 +58,9 @@ gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # filter for testing --------
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "NGA",]
-cache <- pipload::pip_load_cache("NGA", type="list", version = '20240326_2017_01_02_PROD') 
-cache_tb <- pipload::pip_load_cache("NGA", version = '20240326_2017_01_02_PROD') 
+cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "IND",]
+cache <- pipload::pip_load_cache("IND", type="list", version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache("IND", version = '20240326_2017_01_02_PROD') 
 cache_ids <- get_cache_id(cache_inventory) 
 
 # Alternative:
@@ -110,7 +110,7 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
                   keep       = "left")
     
     data.table::setorder(dt., cache_id, pop_data_level)
-    gd_means        <- dt.[,.(cache_id, survey_mean_lcu)]
+    gd_means        <- dt.[,.(cache_id, pop_data_level, survey_mean_lcu)]
     gd_means        <- gd_means[,survey_mean_lcu:= survey_mean_lcu*(12/365)]
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -288,17 +288,17 @@ db_compute_survey_mean_sac_col <- function(cache_tb, gd_mean = NULL) {
  
   dt_g <- dt |>
     fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
-    joyn::joyn(gd_mean,
+    joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                by = c(
-                 "cache_id"
+                 "cache_id", "pop_data_level"
                ),
                y_vars_to_keep = "survey_mean_lcu",
                match_type = "m:1", keep = "left", 
                reportvar = FALSE, sort = FALSE)|>
-    fsummarize(across(c(keep_vars, "cache_id", "reporting_level",
-                        "area", "survey_mean_lcu"), funique),
-               weight = fsum(weight))|>
-    fungroup()
+    fgroup_by(cache_id, reporting_level, pop_data_level)|>
+    fsummarize(across(c(keep_vars[!(keep_vars %in% "pop_data_level")], "area",  
+                        "survey_mean_lcu"), funique),
+               weight = fsum(weight))
   
   dt_c <- collapse::rowbind(dt_m, dt_nat, dt_g)
   # Note: We can eliminate dt_g if needed.
@@ -493,7 +493,7 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
 
 }
 
-svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac_dt,
+svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac_col,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw) 
 
@@ -585,23 +585,12 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
     )
   }
   
-  
-  cdt <- dt[, unique(country_code)]
-  cppp <- jn[.joyn == "y", unique(country_code)]
-  
   dt <- jn[
     .joyn != "y" # Countries in PPP table for which we don't have data
   ][, .joyn := NULL]
   
   #--------- Deflate welfare mean ---------
   
-  # svy_mean_ppp = survey_mean_lcu / cpi / ppp
-  # dt$survey_mean_ppp <-
-  #   wbpip::deflate_welfare_mean(
-  #     welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
-  #   )
-  # Note: Do we need the function? Faster without it?
-  # Example: 
   dt <- dt|>
     fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
 
@@ -622,7 +611,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   dt$is_interpolated <- FALSE
   
   # Add is_used_for_line_up column
-  dt_lu <- dt[area=="national"][, n_rl := .N, by = cache_id]
+  
+  dt_lu <- dt[area=="national"]
   
   dt_lu <- create_line_up_check(dt_lu)
   
@@ -632,7 +622,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                 y_vars_to_keep = "is_used_for_line_up"
   )
   
-  dt[is.na(is_used_for_line_up),is_used_for_line_up := FALSE]
+  dt <- dt[is.na(is_used_for_line_up),
+           is_used_for_line_up := FALSE]
   
   dt <- dt[
     .joyn != "y" 
@@ -640,7 +631,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]
-  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% c("urban", "rural") & dt$n_rl == 2), TRUE, FALSE)]
+  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% 
+                                            c("urban", "rural") & dt$n_rl == 2), TRUE, FALSE)]
   dt$n_rl <- NULL
   
   # Select and order columns
@@ -666,6 +658,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   # Add aggregated mean for surveys split by Urban/Rural 
   
   if(any(dt$is_used_for_aggregation==TRUE)){
+    
     # Select rows w/ non-national pop_data_level
     dt_sub <- dt[is_used_for_aggregation == TRUE]
     

@@ -1,3 +1,12 @@
+# Set-up
+# filter for testing --------
+cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
+cache_inventory <- cache_inventory[grep("CHN|NGA|BOL", cache_id), ]
+cache <- pipload::pip_load_cache(c("NGA", "BOL", "CHN"), type="list", version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache(c("NGA", "BOL", "CHN"), version = '20240326_2017_01_02_PROD') 
+cache_ids <- get_cache_id(cache_inventory) 
+
+
 # 1. Arguments ----
 cache_tb
 mean_table <- svy_mean_ppp_table_tar

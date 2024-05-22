@@ -1,34 +1,71 @@
 # 1. Arguments ----
-tic()
-# NGA for general cases, CHN for aggregate, BOL for levels in group data
-cache_tb <- pipload::pip_load_cache(c("NGA", "CHN", "BOL"), 
-                                    version = '20240326_2017_01_02_PROD')
-toc() # takes a bit: ~2 minutes
-
-
-mean_table <- svy_mean_ppp_table_sac
-# pop_table <- dl_aux$pop reporting_pop in mean_table right?
+cache_tb
+mean_table <- svy_mean_ppp_table_tar
+pop_table <- dl_aux$pop
 ppp_year <- py
 
-
-# 2. Check which distribution types/areas (levels)/grep in the set
+# 2. Check which distribution types/areas (levels)/grep in the set (add later).
 distributions <- funique(cache_tb$distribution_type)
 areas <- funique(cache_tb$area)
 d2 <- grepl("D2", funique(cache_tb$cache_id))
 
 # 3. Fill area -----
 # Fill area with national when empty and reporting_level for aggregate distribution
-cache_tb <- ftransform(cache_tb, area = ifelse(distribution_type == "aggregate",
-                                               as.character(reporting_level),
-                                               ifelse(as.character(area) == "",
-                                                      "national", as.character(area))))
+cache_tb <- ftransform(cache_tb, area = ifelse(as.character(area) == "", # if empty
+                                               "national", # it gets national
+                                               as.character(area))) # else it keeps area
 
-cache_tb <- cache_tb |> ftransform(d2 = ifelse(grepl("D2", cache_id), 1, 0))
 
-#cache_CHN <- ftransform(cache_CHN, area = ifelse(distribution_type == "aggregate",
-#                                               as.character(reporting_level),
-#                                               ifelse(as.character(area) == "",
-#                                                      "national", as.character(area))))
+
+
+# 4. Level and Area estimation ----
+# Level and area estimation happens at:
+## The urban and rural level for micro data, aggregate data, and for some exceptions of group data.
+## The national level for imputed data and group data.
+## The join needs to take pop_data_level at the area level, and keep it disaggregated.
+## These are the cases where reporting_level == area.
+
+# Note: remember that there are two levels for gender.
+area_estimation <- cache_tb |>
+  fsubset(reporting_level == area) |>
+  fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, imputation_id, 
+          area, welfare, weight, welfare_ppp) |>
+  collapse::join(mean_table |> fselect(cache_id, reporting_level, survey_mean_ppp),
+             on=c("cache_id", "reporting_level"), # area needs to be added back here once we have it in the mean table
+             validate = "m:1",
+             how = "left") |>
+  collapse::join(pop_table,
+             on=c("country_code", 
+                  "surveyid_year" = "year",
+                  "reporting_level" = "pop_data_level"), # area needs to be added back here once we have it in the mean table
+             validate = "m:1",
+             how = "left")|>
+  
+
+  
+  
+
+
+
+
+# 5. National estimation ----
+# National estimation happens:
+## Aggregate data: synth + md_estimation.
+## Micro data: md_estimation.
+## In both cases, the join still needs to take pop_data_level at the area level,
+## but then it needs to be combined.
+## These are the cases where reporting_level != area level OR distribution_type == "aggregate".
+
+
+
+
+
+
+
+
+
+
+
 
 
 

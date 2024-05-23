@@ -9,7 +9,7 @@ cache_ids <- get_cache_id(cache_inventory)
 
 # 1. Arguments ----
 cache_tb
-mean_table <- svy_mean_ppp_table_tar
+mean_table <- svy_mean_ppp_table_sac
 pop_table <- dl_aux$pop
 ppp_year <- py
 
@@ -39,7 +39,7 @@ area_estimation <- cache_tb |>
   fsubset(reporting_level == area) |>
   fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, imputation_id, 
           area, welfare, weight, welfare_ppp) |>
-  collapse::join(mean_table |> fselect(cache_id, reporting_level, survey_mean_ppp),
+  collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp),
              on=c("cache_id", "reporting_level"), # area needs to be added back here once we have it in the mean table
              validate = "m:1",
              how = "left") |>

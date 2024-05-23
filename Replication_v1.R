@@ -19,8 +19,8 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-#base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+#base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -50,8 +50,8 @@ base_dir |>
 ## Change gls outdir:
 
 
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -948,14 +948,14 @@ all.equal(svy_mean_ppp_table_tar,to_compare)
 # Missing cache_ids!
 
 dl_dist_stats_tar <- mp_dl_dist_stats(dt         = cache,
-                                      mean_table = svy_mean_ppp_table,
+                                      mean_table = svy_mean_ppp_table_tar,
                                       pop_table  = dl_aux$pop,
                                       cache_id   = cache_ids, 
                                       ppp_year   = py)
 
 
-dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats,
-                                          dsm_table = svy_mean_ppp_table, 
+dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats_tar,
+                                          dsm_table = svy_mean_ppp_table_tar, 
                                           crr_inv   = cache_inventory)
   
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -62,7 +62,7 @@ cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01
 cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
                                       cache_inventory$cache_id %like% "BOL" |
                                       cache_inventory$cache_id %like% "NGA"),]
-#cache <- pipload::pip_load_cache("IND", type="list", version = '20240326_2017_01_02_PROD') 
+cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
 cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 cache_ids <- get_cache_id(cache_inventory) 
 
@@ -699,6 +699,18 @@ svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac_col,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw) 
 
+# to_compare <- svy_mean_lcu_table_sac |> # It does not work (?)
+#   fsubset(area == "national" | reporting_level == area)|>
+#   fselect(-c(area,weight))
+
+to_compare <- svy_mean_lcu_table_sac[
+  svy_mean_lcu_table_sac$area == "national" | 
+    svy_mean_lcu_table_sac$reporting_level == svy_mean_lcu_table_sac$area,
+  -c("area","weight")]
+  
+all.equal(svy_mean_lcu_table_tar,
+          to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE])
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_ppp_table --------
 
@@ -814,7 +826,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_line_up column
   
-  dt_lu <- dt[area=="national"]
+  dt_lu <- dt[area=="national" | reporting_level == area]
   
   dt_lu <- create_line_up_check(dt_lu)
   
@@ -834,7 +846,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]
   dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% 
-                                            c("urban", "rural") & dt$n_rl == 2), TRUE, FALSE)]
+                                            c("urban", "rural") & 
+                                            dt$n_rl == 2), TRUE, FALSE)]
   dt$n_rl <- NULL
   
   # Select and order columns
@@ -872,12 +885,16 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                                                      w = reporting_pop),
                              ppp                     = NA,  
                              cpi                     = NA,
+                             area                    = "national",
                              pop_data_level          = "national", 
                              gdp_data_level          = "national",
                              pce_data_level          = "national",
                              cpi_data_level          = "national",
                              ppp_data_level          = "national",
-                             reporting_level         = "national"),
+                             reporting_level         = "national",
+                             is_interpolated         = FALSE,
+                             is_used_for_line_up     = FALSE,
+                             is_used_for_aggregation = FALSE),
                      by = .(survey_id, cache_id) ]
     
     
@@ -903,6 +920,18 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
                                               cpi_table = dl_aux$cpi,
                                               ppp_table = dl_aux$ppp)
+
+to_compare <- svy_mean_ppp_table_sac[
+  svy_mean_ppp_table_sac$area == "national" | 
+    svy_mean_ppp_table_sac$reporting_level == svy_mean_ppp_table_sac$area,
+  -c("area")]
+
+to_compare <- as.data.table(lapply(to_compare, function(x) { attributes(x) <- NULL; return(x) }))
+
+data.table::setorder(to_compare, survey_id, cache_id, reporting_level)
+data.table::setorder(svy_mean_ppp_table_tar, survey_id, cache_id, reporting_level)
+
+all.equal(svy_mean_ppp_table_tar,to_compare)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

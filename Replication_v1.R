@@ -691,7 +691,10 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                              pce_data_level          = "national",
                              cpi_data_level          = "national",
                              ppp_data_level          = "national",
-                             reporting_level         = "national"),
+                             reporting_level         = "national",
+                             is_interpolated         = FALSE,
+                             is_used_for_line_up     = FALSE,
+                             is_used_for_aggregation = FALSE),
                      by = .(survey_id, cache_id) ]
     
     
@@ -718,14 +721,17 @@ svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table
                                               cpi_table = dl_aux$cpi,
                                               ppp_table = dl_aux$ppp)
 
-
 to_compare <- svy_mean_ppp_table_sac[
   svy_mean_ppp_table_sac$area == "national" | 
     svy_mean_ppp_table_sac$reporting_level == svy_mean_ppp_table_sac$area,
   -c("area")]
 
-all.equal(svy_mean_ppp_table_tar,
-          to_compare[, colnames(svy_mean_ppp_table_tar), with = FALSE])
+to_compare <- as.data.table(lapply(to_compare, function(x) { attributes(x) <- NULL; return(x) }))
+
+data.table::setorder(to_compare, survey_id, cache_id, reporting_level)
+data.table::setorder(svy_mean_ppp_table_tar, survey_id, cache_id, reporting_level)
+
+all.equal(svy_mean_ppp_table_tar,to_compare)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

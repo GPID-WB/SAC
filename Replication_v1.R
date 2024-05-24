@@ -401,9 +401,13 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     .joyn != "y" 
   ][, .joyn := NULL]
   
+  pop_table_org <- pop_table
+  dt_org <- dt
+  
   #--------- Merge with POP ---------
   
   # Create nested POP table
+  
   pop_table$pop_domain <- NULL
   pop_nested <- pop_table %>%
     tidyfast::dt_nest(country_code, pop_data_level, .key = "data")
@@ -413,7 +417,6 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                    by = c("country_code", "pop_data_level"),
                    match_type = "m:1"
   )
-  #NOTE DC: Should we use area to include rural/urban population?
   
   if (nrow(dt[.joyn == "x"]) > 0) {
     msg <- "We should not have NOT-matching observations from survey-mean tables"
@@ -441,7 +444,6 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                     adjust_aux_values,
                     value_var = "pop"
     )
-  # Note DC: check how to optimize so we don't need to use lists.
   
   # Remove nested data column
   dt$data <- NULL
@@ -473,6 +475,22 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   
   data.table::setnames(dt, "pop", "reporting_pop")
   
+  #--------- Merge with POP (version 2) ---------
+  # Change survey_pop and reporting_pop
+  
+  dt_new <- joyn::joyn(dt_org, pop_table,
+                    by = c("country_code", 
+                           "surveyid_year = year",
+                           "area = pop_data_level"
+                           ),
+                    match_type = "m:1",
+                    keep = "left"
+  )
+  
+  dt_new <- dt_new[
+    .joyn != "y" ][, .joyn := NULL]
+  
+  data.table::setnames(dt_new, "pop", "reporting_pop")
   
   # ---- Finalize table ----
   
@@ -733,6 +751,8 @@ data.table::setorder(svy_mean_ppp_table_tar, survey_id, cache_id, reporting_leve
 
 all.equal(svy_mean_ppp_table_tar,to_compare)
 
+waldo::compare(svy_mean_ppp_table_tar,to_compare, tolerance = 1e-7)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -745,7 +765,6 @@ all.equal(svy_mean_ppp_table_tar,to_compare)
 # gd_dist_stats, id_dist_stats, md_dist_stats,
 # get_synth_vector, mean_over_id
 #
-# Missing cache_ids!
 
 dl_dist_stats_tar <- mp_dl_dist_stats(dt         = cache,
                                       mean_table = svy_mean_ppp_table,

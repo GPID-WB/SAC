@@ -12,7 +12,6 @@ cache_tb <- ftransform(cache_tb, area = ifelse(as.character(area) == "", # if em
 
 # 3. Micro and Imputed Level & Area Estimation  ----
 md_id_area <- cache_tb |>
-  fsubset(country_code == "NGA" & surveyid_year == 2015) |>
   fselect(cache_id, distribution_type, reporting_level, imputation_id, 
           area, weight, welfare_ppp) |>
   fsubset(distribution_type %in% c("micro", "imputed")) |>
@@ -34,17 +33,22 @@ md_id_area <- cache_tb |>
     Value = unlist(res))),
     by = .(cache_id, reporting_level, imputation_id, area, weight)] |>
   fselect(-res)|>
-  dcast(cache_id + reporting_level + imputation_id + area + weight ~ Statistic, 
-        value.var = "Value") |>
+  pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
   fgroup_by(cache_id, reporting_level, area)|>
-  fsummarise(across(weight:quantiles9, fmean))
+  fsummarise(across(weight:quantiles9, fmean))|># weight mean as it should be flattened and it removes it from keys
+  fungroup() 
 
 # 4. Micro and Imputed National Estimation ----
+## Note: Directly from md_id_area, we can take the mean using the weight.
 md_id_national <- md_id_area |>
-  fsubset(reporting_level == "national" & area != "national") |> # for those cache_id with urban and rural, we can calculate national
-  fgroup_by(cache_id, country_code, surveyid_year) |>
+  # For those cache_id with urban and rural, we can calculate national, so we filter the national ones out:
+  fsubset(reporting_level == "national" & area != "national") |> 
+  fgroup_by(cache_id) |>
   fsummarise(across(gini:quantiles9, fmean, w = weight)) |>
-  fmutate(area = factor("national"))
+  # Then we give it back the value national:
+  fungroup()|>
+  fmutate(reporting_level = factor("national"), 
+          area = factor("national"))
   
   # fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, imputation_id, 
   #         area, weight, welfare_ppp) |>
@@ -76,18 +80,16 @@ md_id_national <- md_id_area |>
 
 # 5. Group and Aggregate Data Level Estimation -----
 gd_ag_area <- cache_tb |>
-  fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, imputation_id, 
-          area, welfare, weight, welfare) |>
+  fselect(cache_id, distribution_type, reporting_level, imputation_id, 
+          area, welfare, weight) |>
   fsubset(distribution_type %in% c("group", "aggregate")) |>
   collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp),
-                 on=c("cache_id", "reporting_level", "area"), # area needs to be added back here once we have it in the mean table
+                 on=c("cache_id", "reporting_level", "area"), 
                  validate = "m:1",
                  how = "left",
                  verbose = 0) |>
-  roworder(cache_id, country_code, surveyid_year, distribution_type, 
-           reporting_level, area, welfare) |>
-  fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
-            reporting_level, area)|> # no area so dist stat are the sum of both
+  roworder(cache_id, reporting_level, area, welfare) |>
+  fgroup_by(cache_id, reporting_level, area)|>
   fsummarise(res = list(wbpip:::gd_compute_dist_stats(  
     welfare = welfare,
     population = weight,
@@ -95,11 +97,8 @@ gd_ag_area <- cache_tb |>
   _[, c(.SD, .( # using _ because we are using native pipe 
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
-    by = .(cache_id, country_code, surveyid_year, distribution_type,
-           reporting_level, area)] |>
-  dcast(cache_id + country_code + surveyid_year + distribution_type + 
-          reporting_level + area ~ Statistic, 
-        value.var = "Value")
+    by = .(cache_id, reporting_level, area)] |>
+  pivot(ids = 1:5, how="w", values = "Value", names = "Statistic")
 
 
 

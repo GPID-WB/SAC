@@ -355,7 +355,6 @@ svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
 
 
 # New function to add auxiliary data (pwf and pop) :
-# Note: Not many changes for now... (only no rbind at the beginning)
 
 db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
 
@@ -491,6 +490,44 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     .joyn != "y" ][, .joyn := NULL]
   
   data.table::setnames(dt_new, "pop", "reporting_pop")
+  
+  # ---- Survey_pop ----
+  
+  dt_svy_pop <- dt_org[survey_year != floor(survey_year),] |>
+    rowbind(dt_org[survey_year != floor(survey_year),], idcol = "id")|>
+    fmutate(year_rnd = case_when(id == 1 ~ ceiling(survey_year),
+                                 id == 2 ~ floor(survey_year),
+                                 .default = NA_integer_),
+            diff = 1 - abs(survey_year-year_rnd))|>
+    joyn::joyn(pop_table,
+               by = c("country_code", 
+                      "year_rnd = year",
+                      "area = pop_data_level"
+               ),
+               match_type = "m:1",
+               keep = "left"
+    ) |>
+    fgroup_by(survey_id, country_code, survey_year,
+              reporting_level, area)|>
+    fsummarize(survey_pop = fmean(pop, w = diff))
+  
+  dt_new <- joyn::joyn(dt_new, dt_svy_pop,
+                       by = c("survey_id", 
+                              "country_code", 
+                              "survey_year",
+                              "reporting_level",
+                              "area"
+                       ),
+                       match_type = "m:1",
+                       keep = "left"
+  )
+  
+  dt_new <- dt_new |>
+    ftransform(survey_pop = fifelse(is.na(survey_pop), 
+                                    reporting_pop, survey_pop))
+  
+  dt_new <- dt_new[
+    .joyn != "y" ][, .joyn := NULL]
   
   # ---- Finalize table ----
   

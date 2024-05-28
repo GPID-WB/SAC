@@ -21,8 +21,8 @@ md_id_area <- cache_tb |>
              validate = "m:1",
              how = "left",
              verbose = 0) |>
-  roworder(cache_id, reporting_level, imputation_id, area, welfare_ppp) |>
-  fgroup_by(cache_id, reporting_level, imputation_id, area)|> 
+  roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
+  fgroup_by(cache_id, imputation_id, reporting_level, area)|> 
   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
     welfare = welfare_ppp,
     weight = weight,
@@ -31,52 +31,61 @@ md_id_area <- cache_tb |>
   _[, c(.SD, .( # using _ because we are using native pipe 
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
-    by = .(cache_id, reporting_level, imputation_id, area, weight)] |>
+    by = .(cache_id, imputation_id, reporting_level, area, weight)] |>
   fselect(-res)|>
   pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
   fgroup_by(cache_id, reporting_level, area)|>
-  fsummarise(across(weight:quantiles9, fmean))|># weight mean as it should be flattened and it removes it from keys
-  fungroup() 
+  fsummarise(across(weight:quantiles10, fmean))|> # weight mean as it should be flattened and it removes it from keys
+  fungroup()|>
+  frename(survey_median_ppp = median)|>
+  fmutate(reporting_level = as.character(reporting_level))
+
+setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))
 
 # 4. Micro and Imputed National Estimation ----
 ## Note: Directly from md_id_area, we can take the mean using the weight.
-md_id_national <- md_id_area |>
+md_id_national_weighted <- md_id_area |>
   # For those cache_id with urban and rural, we can calculate national, so we filter the national ones out:
   fsubset(reporting_level == "national" & area != "national") |> 
   fgroup_by(cache_id) |>
-  fsummarise(across(gini:quantiles9, fmean, w = weight)) |>
+  fsummarise(across(mean:decile10, fmean, w = weight)) |>
   # Then we give it back the value national:
   fungroup()|>
-  fmutate(reporting_level = factor("national"), 
-          area = factor("national"))
-  
-  # fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, imputation_id, 
-  #         area, weight, welfare_ppp) |>
-  # fsubset(distribution_type %in% c("micro", "imputed") 
-  #         & reporting_level == 'national' & area != "nati") |>
-  # collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp) |>
-  #                  fsubset(area == 'national'),
-  #                on=c("cache_id", "reporting_level"), 
-  #                validate = "m:1",
-  #                how = "left",
-  #                verbose = 0) |>
-  # roworder(cache_id, country_code, surveyid_year, distribution_type, 
-  #          reporting_level, imputation_id, welfare_ppp) |>
-  # fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
-  #           reporting_level, imputation_id)|> 
-  # fsummarise(res = list(wbpip:::md_compute_dist_stats(  
-  #   welfare = welfare_ppp,
-  #   weight = weight,
-  #   mean = funique(survey_mean_ppp))))|>
-  # _[, c(.SD, .( # using _ because we are using native pipe 
-  #   Statistic = names(unlist(res)), 
-  #   Value = unlist(res))),
-  #   by = .(cache_id, country_code, surveyid_year, distribution_type,
-  #          reporting_level, imputation_id)] |>
-  # pivot(ids = 1:6, how="w", values = "Value", names = "Statistic") |>
-  # fgroup_by(cache_id, country_code, surveyid_year, reporting_level)|>
-  # fsummarise(across(mean:quantiles9, fmean))|>
-  # fmutate(area = "national")
+  fmutate(reporting_level = as.character("national"), 
+          area = as.character("national"))
+
+md_id_national_complete <- 
+  cache_tb |>
+  fselect(cache_id, distribution_type, reporting_level, imputation_id, 
+          area, weight, welfare_ppp) |>
+  fsubset(distribution_type %in% c("micro", "imputed") 
+           & reporting_level == 'national' & area != "national") |>
+  collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp) |>
+                  fsubset(area == 'national'),
+                  on=c("cache_id", "reporting_level"), 
+                  validate = "m:1",
+                  how = "left",
+                  verbose = 0) |>
+  roworder(cache_id, imputation_id, welfare_ppp) |>
+  fgroup_by(cache_id, imputation_id)|> 
+  fsummarise(res = list(wbpip:::md_compute_dist_stats(  
+    welfare = welfare_ppp,
+    weight = weight,
+    mean = funique(survey_mean_ppp))))|>
+  _[, c(.SD, .( # using _ because we are using native pipe 
+    Statistic = names(unlist(res)), 
+    Value = unlist(res))),
+    by = .(cache_id, imputation_id)] |>
+  fselect(-res)|>
+  pivot(ids = 1:3, how="w", values = "Value", names = "Statistic") |>
+  fgroup_by(cache_id)|>
+  fsummarise(across(mean:quantiles10, fmean))|> # weight mean as it should be flattened and it removes it from keys
+  fungroup()|>
+  frename(survey_median_ppp = median) |>
+  fmutate(reporting_level = as.character("national"), 
+          area = as.character("national"))
+
+setrename(md_id_national_complete, gsub("quantiles", "decile", names(md_id_national_complete)))
 
 # 5. Group and Aggregate Data Level Estimation -----
 gd_ag_area <- cache_tb |>
@@ -98,37 +107,33 @@ gd_ag_area <- cache_tb |>
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
     by = .(cache_id, reporting_level, area)] |>
-  pivot(ids = 1:5, how="w", values = "Value", names = "Statistic")
+  fselect(-res)|>
+  pivot(ids = 1:3, how="w", values = "Value", names = "Statistic")|>
+  frename(survey_median_ppp = median)|>
+  fmutate(reporting_level = as.character(reporting_level))
 
-
+setrename(gd_ag_area, gsub("deciles", "decile", names(gd_ag_area)))
 
 # 6. Aggregate data with urban/rural levels (both) (synth needed) ----
 ag_national <- cache_tb |>
-  fselect(cache_id, country_code, surveyid_year, distribution_type, reporting_level, 
-          area, welfare, weight) |>
+  fselect(cache_id, distribution_type, reporting_level, area, welfare, welfare_ppp, weight) |>
   fsubset(distribution_type %in% c("aggregate")) |>
   collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp, 
-                                       reporting_pop),
+                                       reporting_pop), # using reporting_pop as it is the same as the one in the pop_table
                  on=c("cache_id", "reporting_level", "area"), 
                  validate = "m:1",
                  how = "left",
                  verbose = 0) |>
-  # collapse::join(pop_table |> fselect(-pop_domain),
-  #                on=c("country_code",
-  #                     "surveyid_year" = "year",
-  #                     "reporting_level" = "pop_data_level"),
-  #                validate = "m:1",
-  #                how = "left",
-  #                verbose = 0) |>
+  roworder(cache_id, reporting_level, area, welfare) |>
   fgroup_by(cache_id, reporting_level, area)|>
   fsummarise(welfare =  wbpip:::sd_create_synth_vector(
     welfare = welfare,
     population = weight,
     mean = funique(survey_mean_ppp),
     pop = funique(reporting_pop)
-  )$welfare) |>
-  fmutate(weight = 1) |>
-  collapse::join(mean_table |>
+  )$welfare,
+  weight = funique(reporting_pop)/100000) |> 
+  collapse::join(mean_table |> # re-joining national mean for micro imputation
                    fsubset(area == "national") |>
                    fselect(cache_id, survey_mean_ppp),
                  on=c("cache_id"), 
@@ -145,182 +150,108 @@ ag_national <- cache_tb |>
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
     by = .(cache_id)] |>
+  fselect(-res)|>
   pivot(ids = 1, how="w", values = "Value", names = "Statistic")|>
-  mutate(reporting_level = factor("national"), 
-         area = factor("national"))
+  mutate(reporting_level = as.character("national"), 
+         area = as.character("national")) |>
+  frename(survey_median_ppp = median)
+  
+setrename(ag_national, gsub("quantiles", "decile", names(ag_national)))
 
 
-# 7. Quick check ----
-setkey(md_id_area, NULL)
-md_id_area_clean <- md_id_area |>
-  fselect(cache_id, reporting_level, area, gini:quantiles9) 
+# Create final with complete and weighted version of md_id_national:
+final <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national_complete, 
+                                 gd_ag_area, ag_national), use.names = TRUE)
 
-md_id_area_clean <- frename(md_id_area_clean, gsub("quantiles", "decile", 
-                                                   names(md_id_area_clean)))
-
-md_id_national_clean <- md_id_national |>
-  fmutate(reporting_level = factor("national"))|>
-  fselect(cache_id, reporting_level, area, gini:quantiles9)
-md_id_national_clean <- frename(md_id_national_clean, gsub("quantiles", "decile", 
-                                                           names(md_id_national_clean)))
-
-gd_ag_area_clean <- gd_ag_area |>
-  fselect(cache_id, reporting_level, area, deciles1:polarization)
-gd_ag_area_clean <- frename(gd_ag_area_clean, gsub("deciles", "decile", 
-                                                           names(gd_ag_area_clean)))
-
-ag_national_clean <- ag_national |>
-  fmutate(area = factor("national"), reporting_level = factor("national"))|>
-  fselect(cache_id, reporting_level, area, mean:quantiles10)
-ag_national_clean <- frename(ag_national_clean, gsub("quantiles", "decile", 
-                                                   names(ag_national_clean)))
+final_weighted <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national_weighted, 
+                        gd_ag_area, ag_national), use.names = TRUE)
 
 
+# 7. Quick check of values ----
+# Version with the "complete' procedure for the md_id_national:
+dist_to_compare_sac<- final |>
+  fsubset(reporting_level == area) |>
+  fselect(cache_id, reporting_level, survey_median_ppp, decile1:decile10, 
+          mean, gini, mld, polarization) |>
+  roworder(cache_id, reporting_level)
 
-dist_to_compare_sac<- md_id_national_clean |>
-  rbind(md_id_area_clean) |>
-  rbind(gd_ag_area_clean) |>
-  rbind(ag_national_clean)
+# Version with the "weighted' procedure where we weight the rural/urban to get the national:
+dist_to_compare_sac_weighted<- final_weighted |>
+  fsubset(reporting_level == area) |>
+  fselect(cache_id, reporting_level, survey_median_ppp, decile1:decile10, 
+          mean, gini, mld, polarization) |>
+  roworder(cache_id, reporting_level)
 
-
+# TAR version
 dist_to_compare_tar <- dt_dist_stats_tar |>
-  fselect(cache_id, reporting_level, decile1:polarization) |>
+  fselect(cache_id, reporting_level, survey_median_ppp, decile1:decile10, 
+          mean, gini, mld, polarization) |>
   roworder(cache_id, reporting_level)
 
-dist_to_compare_sac_national <- dist_to_compare_sac |>
-  fsubset(reporting_level == "national") |>
-  fmutate(reporting_level = as.character(reporting_level))|>
-  fselect(-area)|>
-  roworder(cache_id, reporting_level)
-  
-  
+# Differences between SAC weighted and SAC complete:
+waldo::compare(dist_to_compare_sac_weighted, 
+               dist_to_compare_sac, max_diffs = Inf, tolerance = 1e-7)
 
+# Differences between SAC complete and TAR:
+## at 1e-7 many differences:
+waldo::compare(dist_to_compare_tar[34], 
+               dist_to_compare_sac, max_diffs = Inf, tolerance = 1e-7)
+
+## at 1e-3 still some differences (lines 34 and 37):
 waldo::compare(dist_to_compare_tar, 
-               dist_to_compare_sac_national)
+               dist_to_compare_sac, max_diffs = Inf, tolerance = 1e-3)
 
+
+# 8. Comparison one by one -----
+# md_id_national example:
+waldo::compare(dist_to_compare_sac |>
+  fsubset(cache_id == "NGA_1996_NCS_D1_CON_HIST"),
+dist_to_compare_tar |>
+  fsubset(cache_id == "NGA_1996_NCS_D1_CON_HIST"), max_diffs = Inf, tolerance = 1e-7) # no diff
 
 waldo::compare(dist_to_compare_sac |>
-  fsubset(cache_id == "BOL_1990_EPF_D2_INC_GROUP"),
-dist_to_compare_tar |>
-  fsubset(cache_id == "BOL_1990_EPF_D2_INC_GROUP"))
+                 fsubset(cache_id == "BOL_1997_ENE_D1_INC_GPWG"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "BOL_1997_ENE_D1_INC_GPWG"), max_diffs = Inf, tolerance = 1e-7) # no diff
+
+# gd_ag_area:
+# group
+waldo::compare(dist_to_compare_sac |>
+                 fsubset(cache_id == "NGA_1985_NCS_D1_CON_GROUP"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "NGA_1985_NCS_D1_CON_GROUP"), max_diffs = Inf, tolerance = 1e-7) # no diff
+
+# aggregate
+waldo::compare(dist_to_compare_sac_weighted |>
+                 fsubset(cache_id == "CHN_1981_CRHS-CUHS_D2_INC_GROUP") |> fsubset(reporting_level == "national"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "CHN_1981_CRHS-CUHS_D2_INC_GROUP") |> fsubset(reporting_level == "national"), 
+               max_diffs = Inf, tolerance = 1e-7)
+
+waldo::compare(dist_to_compare_sac |>
+                 fsubset(cache_id == "CHN_2020_CNIHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "CHN_2020_CNIHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"), 
+               max_diffs = Inf, tolerance = 1e-7)
+
+# Problematic cases (34 and 37):
+# 34: CHN_1990_CRHS-CUHS_D2_CON_GROUP
+waldo::compare(dist_to_compare_sac |>
+                 fsubset(cache_id == "CHN_1990_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "CHN_1990_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"), 
+               max_diffs = Inf, tolerance = 1e-7)
+
+# 37: CHN_1993_CRHS-CUHS_D2_CON_GROUP
+waldo::compare(dist_to_compare_sac |>
+                 fsubset(cache_id == "CHN_1993_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"),
+               dist_to_compare_tar |>
+                 fsubset(cache_id == "CHN_1993_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"), 
+               max_diffs = Inf, tolerance = 1e-7)
+
+# Maybe it comes from a different mean?
 
 
-dist_to_compare_sac_national |> head()
-dist_to_compare_tar |> View()
 
 
-if ("micro" %in% distributions){
-  # Micro data have national and level data estimations:
-  if ("rural" %in% areas || "urban" %in% areas) {
-    # 3. Micro and Imputed Data ----
-    ## 3.1 Level Estimates ----
-    md_id_dt_area<- 
-      cache_tb |>
-      fselect(cache_id, country_code, surveyid_year, distribution_type,
-              reporting_level, imputation_id, area, welfare, weight, welfare_ppp) |>
-      fsubset(distribution_type %in% c("imputed", "micro")) |>
-      joyn::joyn(mean_table |> fsubset(distribution_type %in% c("imputed", "micro")),
-                 by=c("cache_id", "surveyid_year", "reporting_level", "area"), # by "area" needs to be added back here 
-                 y_vars_to_keep = c("survey_mean_ppp"),
-                 match_type = "m:1",
-                 reportvar = FALSE,
-                 keep = "left") |>
-      # welfare needs to be ordered (but not by area)
-      # imputation_id is only for imputed, but can be left in for micro, as there is only one value (empty)
-      roworder(cache_id, country_code, surveyid_year, distribution_type, 
-               reporting_level, imputation_id, area, welfare_ppp) |>
-      fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
-                reporting_level, imputation_id, area)|> 
-      fsummarise(res = list(wbpip:::md_compute_dist_stats(  
-        welfare = welfare_ppp,
-        weight = weight,
-        mean = funique(survey_mean_ppp))))|>
-      _[, c(.SD, .( # using _ because we are using native pipe 
-        Statistic = names(unlist(res)), 
-        Value = unlist(res))),
-        by = .(cache_id, country_code, surveyid_year, distribution_type,
-               reporting_level, imputation_id, area)] |>
-      dcast(cache_id + country_code + surveyid_year + distribution_type + 
-              reporting_level + imputation_id + area ~ Statistic, 
-            value.var = "Value") |>
-      fgroup_by(cache_id, country_code, surveyid_year, area)|>
-      fsummarise(across(gini:quantiles9, fmean))
-  }
-  
-  ## 3.2 National Estimates ----
-  md_id_dt_national<- 
-    cache_tb |>
-    fselect(cache_id, country_code, surveyid_year, distribution_type,
-            reporting_level, imputation_id, area, welfare, weight, welfare_ppp) |>
-    fsubset(distribution_type %in% c("imputed", "micro")) |>
-    joyn::joyn(mean_table |> fsubset(distribution_type %in% c("imputed", "micro") 
-                                     & area == "national"),
-               by=c("cache_id", "surveyid_year", "reporting_level"),
-               y_vars_to_keep = c("survey_mean_ppp"),
-               match_type = "m:1",
-               reportvar = FALSE,
-               keep = "left") |>
-    # welfare needs to be ordered (but not by area)
-    roworder(cache_id, country_code, surveyid_year, distribution_type, 
-             reporting_level, imputation_id, welfare_ppp) |>
-    fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
-              reporting_level, imputation_id)|> # no area so dist stat are the sum of both
-    fsummarise(res = list(wbpip:::md_compute_dist_stats(  
-      welfare = welfare_ppp,
-      weight = weight,
-      mean = funique(survey_mean_ppp))))|>
-    _[, c(.SD, .( # using _ because we are using native pipe 
-      Statistic = names(unlist(res)), 
-      Value = unlist(res))),
-      by = .(cache_id, country_code, surveyid_year, distribution_type,
-             reporting_level, imputation_id)] |>
-    dcast(cache_id + country_code + surveyid_year + distribution_type + 
-            reporting_level + imputation_id ~ Statistic, 
-          value.var = "Value") |>
-    fgroup_by(cache_id, country_code, surveyid_year)|>
-    fsummarise(across(gini:quantiles9, fmean))
-  
-}
 
-
-if ("group" %in% distributions){
-  
-  gd_dt_national<- 
-    cache_tb |>
-    fselect(cache_id, country_code, surveyid_year, distribution_type,
-            reporting_level, area, welfare, weight, welfare_ppp) |>
-    fsubset(distribution_type == 'group') |>
-    joyn::joyn(mean_table |> fsubset(distribution_type == 'group' 
-                                     & area == "national"),
-               by=c("cache_id", "surveyid_year", "reporting_level"), # by "area" needs to be added back here 
-               y_vars_to_keep = c("survey_mean_ppp"),
-               match_type = "m:1",
-               reportvar = FALSE,
-               keep = "left") |>
-    # welfare needs to be ordered (but not by area)
-    roworder(cache_id, country_code, surveyid_year, distribution_type, 
-             reporting_level, area, welfare_ppp) |>
-    fgroup_by(cache_id, country_code, surveyid_year, distribution_type,
-              reporting_level, area)|> # no area so dist stat are the sum of both
-    fsummarise(res = list(wbpip:::gd_compute_dist_stats(  
-      welfare = welfare,
-      population = weight,
-      mean = funique(survey_mean_ppp))))|>
-    _[, c(.SD, .( # using _ because we are using native pipe 
-      Statistic = names(unlist(res)), 
-      Value = unlist(res))),
-      by = .(cache_id, country_code, surveyid_year, distribution_type,
-             reporting_level, area)] |>
-    dcast(cache_id + country_code + surveyid_year + distribution_type + 
-            reporting_level + area ~ Statistic, 
-          value.var = "Value")
-
-  if ("aggregate" %in% distributions){
-    # Aggregate data have national, and level data estimations. 
-    # National levels are calculated with the synthetic distribution
-    # Level data are calculated with th
-    
-    
-    
-  }  
-}

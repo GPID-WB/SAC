@@ -400,106 +400,45 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     .joyn != "y" 
   ][, .joyn := NULL]
   
-  pop_table_org <- pop_table
-  dt_org <- dt
-  
   #--------- Merge with POP ---------
   
-  # Create nested POP table
-  
-  pop_table$pop_domain <- NULL
-  pop_nested <- pop_table %>%
-    tidyfast::dt_nest(country_code, pop_data_level, .key = "data")
-  
-  # Merge dt with pop_nested (add survey_pop)
-  dt <- joyn::joyn(dt, pop_nested,
-                   by = c("country_code", "pop_data_level"),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure POP data includes all the countries and pop data levels"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  dt <- dt[
-    .joyn != "y"
-  ][, .joyn := NULL]
-  
-  # Transform survey_year to numeric
-  dt[
-    ,
-    survey_year := as.numeric(survey_year)
-  ]
-  
-  # Adjust population values for surveys spanning two calender years
-  dt$survey_pop <-
-    purrr::map2_dbl(dt$survey_year, dt$data,
-                    adjust_aux_values,
-                    value_var = "pop"
-    )
-  
-  # Remove nested data column
-  dt$data <- NULL
-  
-  # Merge with pop_table (add reporting_pop)
+  pop_table$pop_domain <- NULL 
+
+  # Create reporting_pop
   dt <- joyn::joyn(dt, pop_table,
-                   by = c(
-                     "country_code",
-                     "reporting_year = year",
-                     "pop_data_level"
-                   ),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure POP data includes all the countries and pop data levels"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  dt <- dt[
-    .joyn != "y" # All country/years for which we don't have data... its ox.
-  ][, .joyn := NULL]
-  
-  
-  data.table::setnames(dt, "pop", "reporting_pop")
-  
-  #--------- Merge with POP (version 2) ---------
-  # Change survey_pop and reporting_pop
-  
-  dt_new <- joyn::joyn(dt_org, pop_table,
                     by = c("country_code", 
-                           "surveyid_year = year",
+                           "reporting_year = year",
                            "area = pop_data_level"
                            ),
                     match_type = "m:1",
                     keep = "left"
   )
   
-  dt_new <- dt_new[
+  if (nrow(dt[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt <- dt[
     .joyn != "y" ][, .joyn := NULL]
   
-  data.table::setnames(dt_new, "pop", "reporting_pop")
+  data.table::setnames(dt, "pop", "reporting_pop")
   
   # ---- Survey_pop ----
   
-  dt_svy_pop <- dt_org[survey_year != floor(survey_year),] |>
-    rowbind(dt_org[survey_year != floor(survey_year),], idcol = "id")|>
+  dt_svy_pop <- dt[survey_year != floor(survey_year),] |>
+    rowbind(dt[survey_year != floor(survey_year),], idcol = "id")|>
     fmutate(year_rnd = case_when(id == 1 ~ ceiling(survey_year),
                                  id == 2 ~ floor(survey_year),
                                  .default = NA_integer_),
             diff = 1 - abs(survey_year-year_rnd))|>
-    joyn::joyn(pop_table,
+    joyn::joyn(pop_table, # Need warning in case join == x
                by = c("country_code", 
                       "year_rnd = year",
                       "area = pop_data_level"
@@ -509,9 +448,10 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     ) |>
     fgroup_by(survey_id, country_code, survey_year,
               reporting_level, area)|>
-    fsummarize(survey_pop = fmean(pop, w = diff))
+    fsummarize(survey_pop = fmean(pop, w = diff))|>
+    fungroup()
   
-  dt_new <- joyn::joyn(dt_new, dt_svy_pop,
+  dt <- joyn::joyn(dt, dt_svy_pop,
                        by = c("survey_id", 
                               "country_code", 
                               "survey_year",
@@ -522,12 +462,11 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                        keep = "left"
   )
   
-  dt_new <- dt_new |>
-    ftransform(survey_pop = fifelse(is.na(survey_pop), 
-                                    reporting_pop, survey_pop))
-  
-  dt_new <- dt_new[
+  dt <- dt[
     .joyn != "y" ][, .joyn := NULL]
+  
+  dt <- ftransform(dt, survey_pop = fifelse(is.na(survey_pop), 
+                                    reporting_pop, survey_pop))
   
   # ---- Finalize table ----
   
@@ -562,9 +501,15 @@ to_compare <- svy_mean_lcu_table_sac[
   svy_mean_lcu_table_sac$area == "national" | 
     svy_mean_lcu_table_sac$reporting_level == svy_mean_lcu_table_sac$area,
   -c("area","weight")]
-  
+
+setkey(svy_mean_lcu_table_tar, "country_code")
+setkey(to_compare, "country_code")
+
 all.equal(svy_mean_lcu_table_tar,
           to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE])
+
+waldo::compare(svy_mean_lcu_table_tar,
+               to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE], tolerance = 1e7)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_ppp_table --------

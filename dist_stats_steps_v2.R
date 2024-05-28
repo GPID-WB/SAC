@@ -1,9 +1,6 @@
 # 1. Arguments ----
 cache_tb
 mean_table <- svy_mean_ppp_table_sac
-pop_table <- dl_aux$pop
-ppp_year <- py
-
 
 # 2. Fill area with national when empty ----
 cache_tb <- ftransform(cache_tb, area = ifelse(as.character(area) == "", # if empty
@@ -194,7 +191,7 @@ waldo::compare(dist_to_compare_sac_weighted,
 
 # Differences between SAC complete and TAR:
 ## at 1e-7 many differences:
-waldo::compare(dist_to_compare_tar[34], 
+waldo::compare(dist_to_compare_tar, 
                dist_to_compare_sac, max_diffs = Inf, tolerance = 1e-7)
 
 ## at 1e-3 still some differences (lines 34 and 37):

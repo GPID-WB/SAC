@@ -692,8 +692,38 @@ mp_dl_dist_stats_sac <- function(dt,
   
 }
 
-dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
-                                          mean_table = mean_table)
+## How to Run it:
+#dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
+#                                          mean_table = mean_table)
+
+
+db_create_dist_table_sac <- function(dt,
+                                     dsm_table){
+  dt_clean <- dt |>
+    collapse::join(dsm_table|>
+                     fselect("survey_id", "cache_id", "wb_region_code", "pcn_region_code",
+                             "country_code", "surveyid_year", "survey_year",
+                             "reporting_year", "survey_acronym", "welfare_type",
+                             "cpi", "ppp", "pop_data_level", "reporting_level", "area"),
+                   on=c("cache_id", "reporting_level", "area"), 
+                   validate = "1:1",
+                   how = "left",
+                   verbose = 0)|>
+    fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi)|>
+    fselect(-ppp, -cpi)|>
+    colorder(survey_id, cache_id, wb_region_code, pcn_region_code, country_code,
+             survey_acronym, surveyid_year, survey_year, reporting_year, welfare_type,
+             reporting_level, area, survey_median_lcu, survey_median_ppp, decile1:decile10,
+             mean, gini, mld, polarization, pop_data_level)
+  
+  return(dt_clean)
+}
+
+## How to Run it:
+#dt_dist_stats_sac <- db_create_dist_table_sac(dt = dl_dist_stats_sac,
+#                                              dsm_table = svy_mean_ppp_table_sac)
+
+
 
 
 

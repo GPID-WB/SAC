@@ -14,7 +14,8 @@ dt_dist_stats_sac <- dt |>
                  validate = "1:1",
                  how = "left",
                  verbose = 0)|>
-  fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi)|>
+  fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi,
+          survey_id = toupper(survey_id))|>
   fselect(-ppp, -cpi)|>
   colorder(survey_id, cache_id, wb_region_code, pcn_region_code, country_code,
            survey_acronym, surveyid_year, survey_year, reporting_year, welfare_type,
@@ -49,3 +50,22 @@ compare(to_compare[34:50],
 
 compare(to_compare[37],
         dt_dist_stats_tar[37], tolerance = 1e-7) # CHN 1993
+
+compare(to_compare[89],
+        dt_dist_stats_tar[89], tolerance = 1e-7) # CHN 1993
+
+
+str(to_compare)
+str(dt_dist_stats_tar)
+
+# Check which 'survey_id' entries are different
+mismatch_indices <- which(to_compare$survey_id != dt_dist_stats_tar$survey_id)
+
+# Display the mismatched 'survey_id' from both data frames
+mismatched_data <- data.frame(
+  to_compare = to_compare$survey_id[mismatch_indices],
+  dt_dist_stats_tar = dt_dist_stats_tar$survey_id[mismatch_indices]
+)
+
+# Print the mismatched data
+print(mismatched_data)

@@ -44,8 +44,8 @@ compare(to_compare[76],
 dt_dist_stats_tar[76], tolerance = 1e-7)
 
 # The problem remains with the two China cases:
-compare(to_compare[34],
-        dt_dist_stats_tar[34], tolerance = 1e-7)
+compare(to_compare[34:50],
+        dt_dist_stats_tar[34:50], tolerance = 1e-7) # CHN 1990
 
 compare(to_compare[37],
-        dt_dist_stats_tar[37], tolerance = 1e-7)
+        dt_dist_stats_tar[37], tolerance = 1e-7) # CHN 1993

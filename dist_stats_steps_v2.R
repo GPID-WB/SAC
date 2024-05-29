@@ -130,19 +130,20 @@ ag_national <- cache_tb |>
     pop = funique(reporting_pop)
   )$welfare,
   weight = funique(reporting_pop)/100000) |> 
-  collapse::join(mean_table |> # re-joining national mean for micro imputation
-                   fsubset(area == "national") |>
-                   fselect(cache_id, survey_mean_ppp),
-                 on=c("cache_id"), 
-                 validate = "m:1",
-                 how = "left",
-                 verbose = 0) |>
+  # collapse::join(mean_table |> # re-joining national mean for micro imputation
+  #                  fsubset(area == "national") |>
+  #                  fselect(cache_id, survey_mean_ppp),
+  #                on=c("cache_id"), 
+  #                validate = "m:1",
+  #                how = "left",
+  #                verbose = 0) |>
   roworder(cache_id, welfare) |>
   fgroup_by(cache_id) |>
   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
     welfare = welfare,
-    weight = weight,
-    mean = funique(survey_mean_ppp))))|>
+    weight = weight
+    #mean = funique(survey_mean_ppp)
+    )))|>
   _[, c(.SD, .( # using _ because we are using native pipe 
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
@@ -249,8 +250,11 @@ waldo::compare(dist_to_compare_tar |>
                max_diffs = Inf, tolerance = 1e-7)
 
 # Maybe it comes from a different mean?
+dist_to_compare_sac |> head()
+dist_to_compare_sac_weighted |> head()
 
-
+compare(dist_to_compare_sac[3], 
+        dist_to_compare_sac_weighted[3], max_diffs = Inf)
 
 
 

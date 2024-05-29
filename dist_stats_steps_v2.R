@@ -233,16 +233,16 @@ waldo::compare(dist_to_compare_sac |>
 
 # Problematic cases (34 and 37):
 # 34: CHN_1990_CRHS-CUHS_D2_CON_GROUP
-waldo::compare(dist_to_compare_sac |>
+waldo::compare(dist_to_compare_tar |>
                  fsubset(cache_id == "CHN_1990_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"),
-               dist_to_compare_tar |>
+               dist_to_compare_sac |>
                  fsubset(cache_id == "CHN_1990_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"), 
                max_diffs = Inf, tolerance = 1e-7)
 
 # 37: CHN_1993_CRHS-CUHS_D2_CON_GROUP
-waldo::compare(dist_to_compare_sac |>
+waldo::compare(dist_to_compare_tar |>
                  fsubset(cache_id == "CHN_1993_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"),
-               dist_to_compare_tar |>
+               dist_to_compare_sac |>
                  fsubset(cache_id == "CHN_1993_CRHS-CUHS_D2_CON_GROUP") |> fsubset(reporting_level == "national"), 
                max_diffs = Inf, tolerance = 1e-7)
 

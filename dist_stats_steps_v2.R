@@ -12,18 +12,19 @@ md_id_area <- cache_tb |>
   fselect(cache_id, distribution_type, reporting_level, imputation_id, 
           area, weight, welfare_ppp) |>
   fsubset(distribution_type %in% c("micro", "imputed")) |>
-  collapse::join(mean_table |> 
-                   fselect(cache_id, reporting_level, area, survey_mean_ppp),
-             on=c("cache_id", "reporting_level", "area"), 
-             validate = "m:1",
-             how = "left",
-             verbose = 0) |>
+  # collapse::join(mean_table |> 
+  #                  fselect(cache_id, reporting_level, area, survey_mean_ppp),
+  #            on=c("cache_id", "reporting_level", "area"), 
+  #            validate = "m:1",
+  #            how = "left",
+  #            verbose = 0) |>
   roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
   fgroup_by(cache_id, imputation_id, reporting_level, area)|> 
   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
     welfare = welfare_ppp,
-    weight = weight,
-    mean = funique(survey_mean_ppp))),
+    weight = weight
+    #mean = funique(survey_mean_ppp)
+    )),
     weight = fsum(weight))|>
   _[, c(.SD, .( # using _ because we are using native pipe 
     Statistic = names(unlist(res)), 
@@ -57,24 +58,25 @@ md_id_national_complete <-
           area, weight, welfare_ppp) |>
   fsubset(distribution_type %in% c("micro", "imputed") 
            & reporting_level == 'national' & area != "national") |>
-  collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp) |>
-                  fsubset(area == 'national'),
-                  on=c("cache_id", "reporting_level"), 
-                  validate = "m:1",
-                  how = "left",
-                  verbose = 0) |>
+  # collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp) |>
+  #                 fsubset(area == 'national'),
+  #                 on=c("cache_id", "reporting_level"), 
+  #                 validate = "m:1",
+  #                 how = "left",
+  #                 verbose = 0) |>
   roworder(cache_id, imputation_id, welfare_ppp) |>
   fgroup_by(cache_id, imputation_id)|> 
   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
     welfare = welfare_ppp,
-    weight = weight,
-    mean = funique(survey_mean_ppp))))|>
+    weight = weight
+    #mean = funique(survey_mean_ppp)
+    )))|>
   _[, c(.SD, .( # using _ because we are using native pipe 
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
     by = .(cache_id, imputation_id)] |>
   fselect(-res)|>
-  pivot(ids = 1:3, how="w", values = "Value", names = "Statistic") |>
+  pivot(ids = 1:2, how="w", values = "Value", names = "Statistic") |>
   fgroup_by(cache_id)|>
   fsummarise(across(mean:quantiles10, fmean))|> # weight mean as it should be flattened and it removes it from keys
   fungroup()|>

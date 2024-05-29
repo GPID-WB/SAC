@@ -116,7 +116,8 @@ ag_national <- cache_tb |>
   fselect(cache_id, distribution_type, reporting_level, area, welfare, welfare_ppp, weight) |>
   fsubset(distribution_type %in% c("aggregate")) |>
   collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp, 
-                                       reporting_pop), # using reporting_pop as it is the same as the one in the pop_table
+                                       reporting_pop), 
+                 # using reporting_pop as it is the same as the one in the pop_table
                  on=c("cache_id", "reporting_level", "area"), 
                  validate = "m:1",
                  how = "left",
@@ -130,21 +131,12 @@ ag_national <- cache_tb |>
     pop = funique(reporting_pop)
   )$welfare,
   weight = funique(reporting_pop)/100000) |> 
-  # collapse::join(mean_table |> # re-joining national mean for micro imputation
-  #                  fsubset(area == "national") |>
-  #                  fselect(cache_id, survey_mean_ppp),
-  #                on=c("cache_id"), 
-  #                validate = "m:1",
-  #                how = "left",
-  #                verbose = 0) |>
   roworder(cache_id, welfare) |>
   fgroup_by(cache_id) |>
   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
     welfare = welfare,
-    weight = weight
-    #mean = funique(survey_mean_ppp)
-    )))|>
-  _[, c(.SD, .( # using _ because we are using native pipe 
+    weight = weight)))|>
+  _[, c(.SD, .( 
     Statistic = names(unlist(res)), 
     Value = unlist(res))),
     by = .(cache_id)] |>

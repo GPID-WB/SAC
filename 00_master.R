@@ -48,6 +48,10 @@ withr::with_dir(new = base_dir,
                                          regexp = "\\.R$"), source)
                 })
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Run common R code   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 base_dir |>
   fs::path("_common.R") |>
   source(echo = FALSE)
@@ -57,60 +61,100 @@ base_dir |>
 #gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
 gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
-## Cache data for Nigeria --------
+# base_dir |>
+#   fs::path("_cache_loading_saving.R") |>
+#   source(echo = FALSE)
 
+# filter for testing --------
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "NGA",]
-
-cache <- pipload::pip_load_cache("NGA", version = '20240326_2017_01_02_PROD') 
+cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
+                                      cache_inventory$cache_id %like% "BOL" |
+                                      cache_inventory$cache_id %like% "NGA"),]
+cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 cache_ids <- get_cache_id(cache_inventory) 
 
-## Functions:
+# Alternative:
+# cache_dir <- get_cache_files(cache_inventory)
+# cache_ids <- names(cache_dir)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Load SAC Functions   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 source("C:/WBG/Git repos/Personal/SAC/Functions_SAC.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 0. Implementation   ---------
+# 1. SAC    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Means_pipeline_sac <- function(cache_inventory, cache, dl_aux){
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Group data means --------
+  
+  gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, 
+                                          gdm = dl_aux$gdm)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Means in LCU --------
+  
+  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_tb, 
+                                                 gd_mean = gd_means_sac)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Append Population and PFW --------
+  
+  svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac,
+                                                    pop_table = dl_aux$pop,
+                                                    pfw_table = dl_aux$pfw)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Means in PPP --------
+  
+  svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
+                                                    cpi_table = dl_aux$cpi,
+                                                    ppp_table = dl_aux$ppp)
+  return(svy_mean_ppp_table_sac)
+}
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Group data means --------
+## 2. Target  --------
 
-gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, 
-                                        gdm = dl_aux$gdm)
+Means_pipeline_tar <- function(cache_inventory, cache, dl_aux){
+  
+  gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
+  
+  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
+  
+  svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
+                                                pop_table = dl_aux$pop,
+                                                pfw_table = dl_aux$pfw)
+  
+  svy_mean_ppp_table_tar <- db_create_dsm_table(lcu_table = svy_mean_lcu_table_tar,
+                                                cpi_table = dl_aux$cpi,
+                                                ppp_table = dl_aux$ppp)
+  
+  return(svy_mean_ppp_table_tar)
+}
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Means in LCU --------
 
-svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_tb, 
-                                               gd_mean = gd_means_sac)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Replication   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Append Population and PFW --------
+out_sac <- Means_pipeline_sac(cache_inventory, cache, dl_aux)
+out_tar <- Means_pipeline_tar(cache_inventory, cache, dl_aux)
 
-svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac,
-                                                  pop_table = dl_aux$pop,
-                                                  pfw_table = dl_aux$pfw)
+compare_sac <- out_sac[out_sac$area == "national" | 
+    out_sac$reporting_level == out_sac$area, -c("area")]
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Means in PPP --------
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
-svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
-                                                  cpi_table = dl_aux$cpi,
-                                                  ppp_table = dl_aux$ppp)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
+data.table::setorder(out_tar, survey_id, cache_id, reporting_level)
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Replication --------
+all.equal(out_tar,compare_sac)
 
-svy_mean_ppp <- svy_mean_lcu_table_sac[svy_mean_lcu_table_sac$area == "national" | 
-    svy_mean_lcu_table_sac$reporting_level == svy_mean_lcu_table_sac$area, -c("area","weight")]
-
-setkey(svy_mean_lcu_table_tar, "country_code")
-setkey(svy_mean_ppp, "country_code")
-
-all.equal(svy_mean_lcu_table_tar,
-          svy_mean_ppp[, colnames(svy_mean_lcu_table_tar), with = FALSE])
-
-waldo::compare(svy_mean_lcu_table_tar,
-               svy_mean_ppp[, colnames(svy_mean_lcu_table_tar), with = FALSE], tolerance = 1e7)
+waldo::compare(out_tar,compare_sac, tolerance = 1e-7)
 

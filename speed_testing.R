@@ -1,11 +1,11 @@
 
 bench <- microbenchmark::microbenchmark(
   times = 100,
-  dt = {
-    new_value = db_compute_survey_mean_sac_dt(cache_tb = cache_tb, gd_mean = gd_mean)
+  SAC = {
+    new_value = Means_pipeline_sac(cache_inventory, cache, dl_aux)
     },
-  collapse = {
-    old_value = db_compute_survey_mean_sac_col(cache_tb = cache_tb, gd_mean = gd_mean)
+  Nested = {
+    old_value = Means_pipeline_tar(cache_inventory, cache, dl_aux)
     }
 )
 if (requireNamespace("highcharter")) {
@@ -19,7 +19,7 @@ if (requireNamespace("highcharter")) {
     highcharter::hc_xAxis(type = "category") |>
     highcharter::hc_chart(inverted=TRUE) |>
     highcharter::hc_add_series_list(hc_dt) |>
-    highcharter::hc_title(text = "Comparison db_compute_survey_mean_sac")
+    highcharter::hc_title(text = "Comparison SAC vs Nested (Means)")
 
 } else {
   boxplot(bench, outline = FALSE)

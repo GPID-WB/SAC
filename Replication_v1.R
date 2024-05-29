@@ -969,18 +969,11 @@ mp_dl_dist_stats_sac <- function(dt,
     fselect(cache_id, distribution_type, reporting_level, imputation_id, 
             area, weight, welfare_ppp) |>
     fsubset(distribution_type %in% c("micro", "imputed")) |>
-    collapse::join(mean_table |> 
-                     fselect(cache_id, reporting_level, area, survey_mean_ppp),
-                   on=c("cache_id", "reporting_level", "area"), 
-                   validate = "m:1",
-                   how = "left",
-                   verbose = 0) |>
     roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
     fgroup_by(cache_id, imputation_id, reporting_level, area)|> 
     fsummarise(res = list(wbpip:::md_compute_dist_stats(  
       welfare = welfare_ppp,
-      weight = weight,
-      mean = funique(survey_mean_ppp))),
+      weight = weight)),
       weight = fsum(weight))|>
     _[, c(.SD, .( 
       Statistic = names(unlist(res)), 
@@ -1002,18 +995,11 @@ mp_dl_dist_stats_sac <- function(dt,
             area, weight, welfare_ppp) |>
     fsubset(distribution_type %in% c("micro", "imputed") 
             & reporting_level == 'national' & area != "national") |>
-    collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp) |>
-                     fsubset(area == 'national'),
-                   on=c("cache_id", "reporting_level"), 
-                   validate = "m:1",
-                   how = "left",
-                   verbose = 0) |>
     roworder(cache_id, imputation_id, welfare_ppp) |>
     fgroup_by(cache_id, imputation_id)|> 
     fsummarise(res = list(wbpip:::md_compute_dist_stats(  
       welfare = welfare_ppp,
-      weight = weight,
-      mean = funique(survey_mean_ppp))))|>
+      weight = weight)))|>
     _[, c(.SD, .(  
       Statistic = names(unlist(res)), 
       Value = unlist(res))),
@@ -1125,7 +1111,8 @@ db_create_dist_table_sac <- function(dt,
                    validate = "1:1",
                    how = "left",
                    verbose = 0)|>
-    fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi)|>
+    fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi,
+            survey_id = toupper(survey_id))|>
     fselect(-ppp, -cpi)|>
     colorder(survey_id, cache_id, wb_region_code, pcn_region_code, country_code,
              survey_acronym, surveyid_year, survey_year, reporting_year, welfare_type,

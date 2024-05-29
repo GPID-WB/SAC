@@ -1,6 +1,6 @@
 # 1. Arguments ----
-cache_tb
-mean_table <- svy_mean_ppp_table_sac
+cache_tb # This is created from your main code
+mean_table <- svy_mean_ppp_table_sac # This as well
 
 # 2. Fill area with national when empty ----
 cache_tb <- ftransform(cache_tb, area = ifelse(as.character(area) == "", # if empty
@@ -164,7 +164,8 @@ final_weighted <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national_
                         gd_ag_area, ag_national), use.names = TRUE)
 
 
-# 7. Quick check of values ----
+# 7. (NO NEED TO RUN) Quick check of values ----
+# Note: !!!! NO NEED TO RUN ALL OF THESE, MOVE TO DIST_TABLE_STEPS, which is cleaner.
 # Version with the "complete' procedure for the md_id_national:
 dist_to_compare_sac<- final |>
   fsubset(reporting_level == area) |>
@@ -199,7 +200,8 @@ waldo::compare(dist_to_compare_tar,
                dist_to_compare_sac, max_diffs = Inf, tolerance = 1e-3)
 
 
-# 8. Comparison one by one -----
+# 8. (NO NEED TO RUN) Comparison one by one -----
+# Note: !!!! NO NEED TO RUN ALL OF THESE, MOVE TO DIST_TABLE_STEPS, which is cleaner.
 # md_id_national example:
 waldo::compare(dist_to_compare_sac |>
   fsubset(cache_id == "NGA_1996_NCS_D1_CON_HIST"),

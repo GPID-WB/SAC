@@ -2,11 +2,15 @@
 # Install packages   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# install.packages(c("conflicted", "dotenv", "targets", "tarchetypes",
+# "bs4Dash", "clustermq", "future", "gt", "pingr", "shinycssloaders",
+# "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr"))
+
 # remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
 # remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
 
-# pak::pak("PIP-Technical-Team/pipfun@ongoing", ask = FALSE)
-# pak::pak("PIP-Technical-Team/pipload@ongoing", ask = FALSE)
+# remotes::install_github("PIP-Technical-Team/pipfun@ongoing")
+# remotes::install_github("PIP-Technical-Team/pipload@ongoing")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Defaults   ---------
@@ -20,7 +24,7 @@ max_year_country   <- 2022
 max_year_aggregate <- 2022
 
 #base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/PovcalNet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -50,7 +54,7 @@ base_dir |>
 ## Change gls outdir:
 
 #gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/PovcalNet/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -749,14 +753,14 @@ waldo::compare(svy_mean_ppp_table_tar,to_compare, tolerance = 1e-7)
 #
 
 dl_dist_stats_tar <- mp_dl_dist_stats(dt         = cache,
-                                      mean_table = svy_mean_ppp_table,
+                                      mean_table = svy_mean_ppp_table_tar,
                                       pop_table  = dl_aux$pop,
                                       cache_id   = cache_ids, 
                                       ppp_year   = py)
 
 
-dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats,
-                                          dsm_table = svy_mean_ppp_table, 
+dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats_tar,
+                                          dsm_table = svy_mean_ppp_table_tar, 
                                           crr_inv   = cache_inventory)
   
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -768,8 +772,8 @@ dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats,
 
 # Note: No need of SAC
 
-dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table, 
-                                                             dist_table = dt_dist_stats,
+dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table_tar, 
+                                                             dist_table = dt_dist_stats_tar,
                                                              gdp_table = dl_aux$gdp,
                                                              pce_table = dl_aux$pce) 
 

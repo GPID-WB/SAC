@@ -19,8 +19,8 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-#base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+#base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -50,8 +50,8 @@ base_dir |>
 ## Change gls outdir:
 
 
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -354,205 +354,6 @@ svy_mean_lcu_sac_col <- db_compute_survey_mean_sac_col(cache_tb = cache_tb, gd_m
 svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
                                               pop_table = dl_aux$pop,
                                               pfw_table = dl_aux$pfw)
-
-
-# Objective:  Local Currency Unit survey mean table 
-# 
-# tar_target(
-#   svy_mean_lcu_table,
-#   db_create_lcu_table(
-#     dl        = svy_mean_lcu,
-#     pop_table = dl_aux$pop,
-#     pfw_table = dl_aux$pfw)
-# )
-#
-# Functions used to calculate this:
-# adjust_aux_values
-#
-# Packages needed: tidyfast
-
-
-svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
-                                              pop_table = dl_aux$pop,
-                                              pfw_table = dl_aux$pfw)
-
-svy_mean_lcu_table_sac <- db_create_lcu_table(dl = svy_mean_lcu_sac,
-                                              pop_table = dl_aux$pop,
-                                              pfw_table = dl_aux$pfw) 
-
-
-# Note: We might not need to optimize this function if we start with a table
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## svy_mean_ppp_table --------
-
-# Objective: Deflated survey mean (DSM) table
-#
-# tar_target(svy_mean_ppp_table,
-#            db_create_dsm_table(
-#              lcu_table = svy_mean_lcu_table,
-#              cpi_table = dl_aux$cpi,
-#              ppp_table = dl_aux$ppp))
-#
-# Function used to calculate this:
-# deflate_welfare_mean
-
-svy_mean_ppp_table_tar <- db_create_dsm_table(lcu_table = svy_mean_lcu_table_tar,
-                                              cpi_table = dl_aux$cpi,
-                                              ppp_table = dl_aux$ppp)
-
-# New function:
-
-db_create_dsm_table_sac <- function(lcu_table,
-                                    cpi_table,
-                                    ppp_table) {
-  
-  
-  #--------- Merge with CPI ---------
-  
-  # Select CPI columns
-  cpi_table <-
-    cpi_table[, .SD,
-              .SDcols =
-                c(
-                  "country_code", "survey_year", "survey_acronym",
-                  "cpi_data_level", "cpi"
-                )
-    ]
-  
-  # Merge survey table with CPI (left join)
-  dt <- joyn::joyn(lcu_table, cpi_table,
-                   by = c(
-                     "country_code", "survey_year",
-                     "survey_acronym", "cpi_data_level"
-                   ),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure CPI table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  dt <- dt[
-    .joyn != "y" # This is unnecessary data in cpi table... should we have it?
-  ][, .joyn := NULL]
-  
-  #--------- Merge with PPP ---------
-  
-  # Select default PPP values
-  ppp_table <- ppp_table[ppp_default == TRUE]
-  
-  # Select PPP columns
-  ppp_table <-
-    ppp_table[, .SD,
-              .SDcols =
-                c("country_code", "ppp_data_level", "ppp")
-    ]
-  
-  # Merge survey table with PPP (left join)
-  jn <- joyn::joyn(dt, ppp_table,
-                   by = c("country_code", "ppp_data_level"),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(jn[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure PPP table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  
-  cdt <- dt[, unique(country_code)]
-  cppp <- jn[.joyn == "y", unique(country_code)]
-  
-  dt <- jn[
-    .joyn != "y" # Countries in PPP table for which we don't have data
-  ][, .joyn := NULL]
-  
-  #--------- Deflate welfare mean ---------
-  
-  # svy_mean_ppp = survey_mean_lcu / cpi / ppp
-  dt$survey_mean_ppp <-
-    wbpip::deflate_welfare_mean(
-      welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
-    )
-  
-  
-  #--------- Add comparable spell --------- ## Change this. 
-  
-  dl <- split(dt, list(dt$country_code, dt$survey_comparability))
-  dl <- lapply(dl, function(x) {
-    if (nrow(x) == 1) {
-      x$comparable_spell <- x$reporting_year
-    } else {
-      x$comparable_spell <-
-        sprintf(
-          "%s - %s",
-          x$reporting_year[1],
-          x$reporting_year[length(x$reporting_year)]
-        )
-    }
-    return(x)
-  })
-  dt <- data.table::rbindlist(dl)
-  
-  #--------- Finalize table ---------
-  
-  # Add is_interpolated column
-  dt$is_interpolated <- FALSE
-  
-  # Add is_used_for_line_up column
-  dt <- create_line_up_check(dt)
-  
-  # Add is_used_for_aggregation column
-  dt[, n_rl := .N, by = cache_id]
-  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% c("urban", "rural") & dt$n_rl == 2), TRUE, FALSE)]
-  dt$n_rl <- NULL
-  
-  # Select and order columns
-  dt <- dt[, .SD,
-           .SDcols =
-             c(
-               "survey_id", "cache_id", "wb_region_code", "pcn_region_code",
-               "country_code", "survey_acronym", "survey_coverage",
-               "survey_comparability", "comparable_spell",
-               "surveyid_year", "reporting_year",
-               "survey_year", "survey_time", "welfare_type",
-               "survey_mean_lcu", "survey_mean_ppp", #' survey_pop',
-               "reporting_pop", "ppp", "cpi", "pop_data_level",
-               "gdp_data_level", "pce_data_level",
-               "cpi_data_level", "ppp_data_level", "reporting_level",
-               "distribution_type", "gd_type",
-               "is_interpolated", "is_used_for_line_up",
-               "is_used_for_aggregation", "display_cp"
-             )
-  ]
-  
-  # Add aggregated mean for surveys split by Urban/Rural
-  dt <- add_aggregated_mean(dt)
-  
-  # Sort rows
-  data.table::setorder(dt, survey_id)
-  
-  # change factors to characters
-  nn <- names(dt[, .SD, .SDcols = is.factor])
-  dt[, (nn) := lapply(.SD, as.character),
-     .SDcols = nn]
-  
-  return(dt)
-}
 
 # New function to add auxiliary data (pwf and pop) :
 
@@ -1090,7 +891,7 @@ mp_dl_dist_stats_sac <- function(dt,
 
 ## Run it:
 dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
-                                          mean_table = mean_table)
+                                          mean_table = svy_mean_ppp_table_sac)
 
 
 # 2. Add additional variables:
@@ -1138,8 +939,8 @@ dt_dist_stats_sac <- db_create_dist_table_sac(dt = dl_dist_stats_sac,
 
 # Note: No need of SAC
 
-dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table, 
-                                                             dist_table = dt_dist_stats,
+dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table_tar, 
+                                                             dist_table = dt_dist_stats_tar,
                                                              gdp_table = dl_aux$gdp,
                                                              pce_table = dl_aux$pce) 
 

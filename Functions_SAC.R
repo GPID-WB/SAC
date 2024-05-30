@@ -680,7 +680,7 @@ mp_dl_dist_stats_sac <- function(dt,
 
 ## How to Run it:
 #dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
-#                                          mean_table = mean_table)
+#                                          mean_table = svy_mean_ppp_table_sac)
 
 
 db_create_dist_table_sac <- function(dt,

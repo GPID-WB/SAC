@@ -902,7 +902,7 @@ mp_dl_dist_stats_sac <- function(dt,
       by = .(cache_id)] |>
     fselect(-res)|>
     pivot(ids = 1, how="w", values = "Value", names = "Statistic")|>
-    mutate(reporting_level = as.character("national"), 
+    fmutate(reporting_level = as.character("national"), 
            area = as.character("national")) |>
     frename(survey_median_ppp = median)
   

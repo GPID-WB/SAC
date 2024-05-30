@@ -19,8 +19,15 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-#base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+
+if (Sys.info()['user'] ==  "wb535623") {
+  
+  base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+  
+} else if (Sys.info()['user'] ==  "wb622077") {
+  
+  base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -50,8 +57,8 @@ base_dir |>
 ## Change gls outdir:
 
 
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -912,7 +919,7 @@ mp_dl_dist_stats_sac <- function(dt,
 
 ## Run it:
 dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
-                                          mean_table = mean_table)
+                                          mean_table = svy_mean_ppp_table_sac)
 
 
 # 2. Add additional variables:
@@ -949,6 +956,18 @@ dt_dist_stats_sac <- db_create_dist_table_sac(dt = dl_dist_stats_sac,
                                               dsm_table = svy_mean_ppp_table_sac)
 
 
+to_compare_dist_stats <- dt_dist_stats_sac |>
+  fsubset(reporting_level == area)|>
+  roworder(cache_id, reporting_level)|>
+  fselect(-area)
+  
+to_compare_dist_stats <- as.data.table(lapply(to_compare_dist_stats, function(x) { attributes(x) <- NULL; return(x) }))
+dt_dist_stats_tar <- as.data.table(lapply(dt_dist_stats_tar, function(x) { attributes(x) <- NULL; return(x) }))
+
+all.equal(svy_mean_ppp_table_tar,to_compare)
+
+waldo::compare(dt_dist_stats_tar,to_compare_dist_stats, 
+               tolerance = 1e-7)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -960,8 +979,8 @@ dt_dist_stats_sac <- db_create_dist_table_sac(dt = dl_dist_stats_sac,
 
 # Note: No need of SAC
 
-dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table, 
-                                                             dist_table = dt_dist_stats,
+dt_prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = svy_mean_ppp_table_tar, 
+                                                             dist_table = dt_dist_stats_tar,
                                                              gdp_table = dl_aux$gdp,
                                                              pce_table = dl_aux$pce) 
 

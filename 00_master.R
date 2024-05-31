@@ -11,11 +11,16 @@
 # Install packages   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# install.packages(c("conflicted", "dotenv", "targets", "tarchetypes",
+# "bs4Dash", "clustermq", "future", "gt", "pingr", "shinycssloaders",
+# "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr",
+# "assertthat"))
+
 # remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
 # remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
 
-# pak::pak("PIP-Technical-Team/pipfun@ongoing", ask = FALSE)
-# pak::pak("PIP-Technical-Team/pipload@ongoing", ask = FALSE)
+# remotes::install_github("PIP-Technical-Team/pipfun@ongoing")
+# remotes::install_github("PIP-Technical-Team/pipload@ongoing")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Defaults   ---------
@@ -28,8 +33,16 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-#base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+if (Sys.info()['user'] ==  "wb535623") {
+  
+  #Need to add Povcalnet if in remote computer
+  base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+  
+} else if (Sys.info()['user'] ==  "wb622077") {
+  
+  #Need to add Povcalnet if in remote computer
+  base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -58,37 +71,61 @@ base_dir |>
 
 ## Change gls outdir:
 
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+if (Sys.info()['user'] ==  "wb535623") {
+  
+  #Need to add Povcalnet if in remote computer
+  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache") 
+  
+} else if (Sys.info()['user'] ==  "wb622077") {
+  
+  #Need to add Povcalnet if in remote computer
+  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+  
+}
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Load test data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## The following file is run in the pipeline but we skipped it to save time
+#
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
 #   source(echo = FALSE)
 
-# filter for testing --------
+### Cache inventory ---------
+
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
 cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
                                       cache_inventory$cache_id %like% "BOL" |
                                       cache_inventory$cache_id %like% "NGA"),]
-cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
-cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 cache_ids <- get_cache_id(cache_inventory) 
 
-# Alternative:
-# cache_dir <- get_cache_files(cache_inventory)
-# cache_ids <- names(cache_dir)
+### Full Cache ---------
+
+# In list format:
+cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+
+# In dt format:
+cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-source("C:/WBG/Git repos/Personal/SAC/Functions_SAC.R")
+source("Functions_SAC.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 1. SAC    ---------
+# 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Means_pipeline_sac <- function(cache_inventory, cache, dl_aux){
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 1.1 SAC --------
+
+
+Means_pipeline_sac <- function(cache_inventory, 
+                               cache, 
+                               dl_aux){
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Group data means --------
@@ -119,13 +156,17 @@ Means_pipeline_sac <- function(cache_inventory, cache, dl_aux){
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## 2. Target  --------
+## 1.2 Target  --------
 
-Means_pipeline_tar <- function(cache_inventory, cache, dl_aux){
+Means_pipeline_tar <- function(cache_inventory, 
+                               cache, 
+                               dl_aux){
   
-  gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
+  gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
+                                      gdm = dl_aux$gdm)
   
-  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, gd_means_tar) 
+  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, 
+                                      gd_means_tar) 
   
   svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
                                                 pop_table = dl_aux$pop,
@@ -138,23 +179,159 @@ Means_pipeline_tar <- function(cache_inventory, cache, dl_aux){
   return(svy_mean_ppp_table_tar)
 }
 
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Replication   ---------
+# 2. Replication Means  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-out_sac <- Means_pipeline_sac(cache_inventory, cache, dl_aux)
-out_tar <- Means_pipeline_tar(cache_inventory, cache, dl_aux)
+# Load output:
+means_out_sac <- Means_pipeline_sac(cache_inventory, 
+                                    cache, 
+                                    dl_aux)
+means_out_tar <- Means_pipeline_tar(cache_inventory, 
+                                    cache, 
+                                    dl_aux)
 
-compare_sac <- out_sac[out_sac$area == "national" | 
-    out_sac$reporting_level == out_sac$area, -c("area")]
+# Filter without new area-level calculations
+compare_sac <- means_out_sac[means_out_sac$area == "national" | 
+                               means_out_sac$reporting_level == means_out_sac$area, -c("area")]
 
+# Eliminate attributes 
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
+# Order rows
 data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
-data.table::setorder(out_tar, survey_id, cache_id, reporting_level)
+data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
 
+# Comparison
+all.equal(means_out_tar,compare_sac)
+
+waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 3. Dist_Stats   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.1 SAC --------
+
+Dist_stats_sac <- function(cache, 
+                           dsm_table){
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Calculate Distributional Statistics --------
+  
+  db_dist_stats <- db_dist_stats_sac(dt = cache,
+                                         mean_table = dsm_table)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Add/remove relevant variables --------
+  
+  dt_dist_stats_sac <- db_create_dist_table_sac(dt = db_dist_stats,
+                                                dsm_table = dsm_table)
+  
+  return(dt_dist_stats_sac)
+}
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.2 Target --------
+
+Dist_stats_tar <- function(cache,
+                           dsm_table,
+                           dl_aux,
+                           cache_ids,
+                           py,
+                           cache_inventory){
+  
+  dl_dist_stats_tar <- mp_dl_dist_stats(dt         = cache,
+                                        mean_table = dsm_table,
+                                        pop_table  = dl_aux$pop,
+                                        cache_id   = cache_ids, 
+                                        ppp_year   = py)
+  
+  dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats_tar,
+                                            dsm_table = dsm_table, 
+                                            crr_inv   = cache_inventory)
+  return(dt_dist_stats_tar)
+  
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 4. Replication Dist Stats   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Load output:
+dist_out_sac <- Dist_stats_sac(cache_tb, 
+                          out_sac)
+
+dist_out_tar <- Dist_stats_tar(cache,
+                          out_tar,
+                          dl_aux,
+                          cache_ids,
+                          py,
+                          cache_inventory)
+
+# Filter without new area-level calculations
+compare_sac <- out_sac[out_sac$reporting_level == out_sac$area, -c("area")]
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Set similar keys
+setkey(out_tar, "country_code")
+setkey(compare_sac, "country_code")
+
+# Order rows
+data.table::setorder(compare_sac, cache_id, reporting_level)
+data.table::setorder(out_tar, cache_id, reporting_level)
+
+# Comparison
 all.equal(out_tar,compare_sac)
 
 waldo::compare(out_tar,compare_sac, tolerance = 1e-7)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 5. Prod_svy_estimation   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.1 SAC --------
+
+### Final table with means, dist stats, gdp and pce  ---------
+
+Prod_svy_estimation_sac <- db_create_svy_estimation_table_sac(dsm_table = means_out_sac, 
+                                                                 dist_table = dist_out_sac,
+                                                                 gdp_table = dl_aux$gdp,
+                                                                 pce_table = dl_aux$pce)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.2 Target --------
+
+Prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = means_out_tar, 
+                                                             dist_table = dist_out_tar,
+                                                             gdp_table = dl_aux$gdp,
+                                                             pce_table = dl_aux$pce) 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 6. Replication Prod_svy_estimation   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Filter without new area-level calculations
+to_compare <- Prod_svy_estimation_sac[
+  Prod_svy_estimation_sac$area == "national" | 
+    Prod_svy_estimation_sac$reporting_level == Prod_svy_estimation_sac$area,
+  -c("area")]
+
+# Eliminate attributes 
+to_compare <- as.data.table(lapply(to_compare, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Set similar keys
+setkey(Prod_svy_estimation_tar, "country_code")
+setkey(to_compare, "country_code")
+
+# Comparison
+all.equal(Prod_svy_estimation_tar,to_compare)
+
+waldo::compare(Prod_svy_estimation_tar,to_compare, tolerance = 1e-7)
+
 

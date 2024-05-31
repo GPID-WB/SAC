@@ -4,7 +4,8 @@
 
 # install.packages(c("conflicted", "dotenv", "targets", "tarchetypes",
 # "bs4Dash", "clustermq", "future", "gt", "pingr", "shinycssloaders",
-# "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr"))
+# "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr",
+# "assertthat"))
 
 # remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
 # remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
@@ -27,10 +28,12 @@ max_year_aggregate <- 2022
 
 if (Sys.info()['user'] ==  "wb535623") {
   
+  #Need to add Povcalnet if in remote computer
   base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
   
 } else if (Sys.info()['user'] ==  "wb622077") {
   
+  #Need to add Povcalnet if in remote computer
   base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
 }
 
@@ -62,9 +65,17 @@ base_dir |>
 
 ## Change gls outdir:
 
-
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/PovcalNet/01.personal/wb535623/PIP/Cache")
+if (Sys.info()['user'] ==  "wb535623") {
+  
+  #Need to add Povcalnet if in remote computer
+  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache") 
+  
+} else if (Sys.info()['user'] ==  "wb622077") {
+  
+  #Need to add Povcalnet if in remote computer
+  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+  
+}
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>

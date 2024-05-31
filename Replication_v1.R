@@ -992,6 +992,9 @@ waldo::compare(dt_dist_stats_tar,to_compare_dist_stats,
 # 3. Prod_svy_estimation   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+# Objective: Merge survey_means and dist_stats, as well as gdp and pce. 
+
 # It depends of: 
 # svy_mean_ppp_table, dt_dist_stats
 

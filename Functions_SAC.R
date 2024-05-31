@@ -6,7 +6,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## gd_means --------
+## 1.1 gd_means --------
 ## 
 ## Objective: Fetch Group Data survey means and convert them to daily values
 
@@ -34,7 +34,7 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## svy_mean_lcu --------
+## 1.2 svy_mean_lcu --------
 ##
 ## Objective:  Local Currency Unit survey mean list
 
@@ -130,7 +130,7 @@ db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## svy_mean_lcu_table --------
+## 1.3 svy_mean_lcu_table --------
 ##
 ## Objective: Add auxiliary data (pwf and pop)
 
@@ -269,9 +269,9 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## svy_mean_ppp_table --------
+## 1.4 svy_mean_ppp_table --------
 ##
-## Objective: Deflated survey mean (DSM) table
+## Objective: Deflated survey mean (DSM) table (merge with CPI and PPP table)
 
 db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
@@ -462,15 +462,19 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Objective: Calculate distributional statistics at the national and area level
 
-mp_dl_dist_stats_sac <- function(dt, 
-                                 mean_table){
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 2.1 db_dist_stats_sac --------
+##
+## Objective: Calculate distributional statistics at the national and area level
+## Note: This function is missing the warnings in the old pipeline
+
+db_dist_stats_sac <- function(dt, mean_table){
   
   # 1. Fill area with national when empty ----
   dt <- ftransform(dt, area = ifelse(as.character(area) == "", # if empty
-                                           "national", # it gets national
-                                            as.character(area))) # else it keeps area
+                                     "national", # it gets national
+                                     as.character(area))) # else it keeps area
   
   # 3. Micro and Imputed Data: Level & Area Estimation  ----
   md_id_area <- dt |>
@@ -496,7 +500,7 @@ mp_dl_dist_stats_sac <- function(dt,
     fmutate(reporting_level = as.character(reporting_level))
   
   setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))
- 
+  
   # 4. Micro and Imputed Data: National Estimation ----
   md_id_national <- dt |>
     fselect(cache_id, distribution_type, reporting_level, imputation_id, 
@@ -581,13 +585,13 @@ mp_dl_dist_stats_sac <- function(dt,
       by = .(cache_id)] |>
     fselect(-res)|>
     pivot(ids = 1, how="w", values = "Value", names = "Statistic")|>
-    mutate(reporting_level = as.character("national"), 
-           area = as.character("national")) |>
+    fmutate(reporting_level = as.character("national"), 
+            area = as.character("national")) |>
     frename(survey_median_ppp = median)
   
   setrename(ag_national, gsub("quantiles", "decile", names(ag_national)))
   
-
+  
   # 7. Rbindlist and return ----
   final <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national, 
                           gd_ag_area, ag_national), use.names = TRUE)
@@ -596,13 +600,15 @@ mp_dl_dist_stats_sac <- function(dt,
   
 }
 
-## How to Run it:
-#dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb, 
-#                                          mean_table = svy_mean_ppp_table_sac)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 2.2 db_create_dist_table_sac --------
+##
+## Objective: Clean dist_stats table by adding/removing variables 
+## and create median in LCU
+## Note: This function is missing the warnings from the old pipeline/targets code
 
-
-db_create_dist_table_sac <- function(dt,
-                                     dsm_table){
+db_create_dist_table_sac <- function(dt, dsm_table){
+  
   dt_clean <- dt |>
     collapse::join(dsm_table|>
                      fselect("survey_id", "cache_id", "wb_region_code", "pcn_region_code",
@@ -624,10 +630,121 @@ db_create_dist_table_sac <- function(dt,
   return(dt_clean)
 }
 
-## How to Run it:
-#dt_dist_stats_sac <- db_create_dist_table_sac(dt = dl_dist_stats_sac,
-#                                              dsm_table = svy_mean_ppp_table_sac)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 3. Prod_svy_estimation   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.1 db_create_svy_estimation_table_sac --------
+##
+## Objective: Combine survey_means and dist_stats in one 
+## table and merge gdp and pce data
+ 
+db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table, pce_table) {
+  
+  # TEMP FIX: TO BE REMOVED (Diana: Do we still need it?)
+  dist_table$survey_id <- toupper(dist_table$survey_id)
+  dsm_table$survey_id <- toupper(dsm_table$survey_id)
+  
+  # Remove cols 
+  dist_table$reporting_year <- NULL
+  gdp_table$gdp_domain <- NULL
+  pce_table$pce_domain <- NULL
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Merge tables --------
+  
+  # Merge DSM table w/ dist stat table (full join)
+  dt <- joyn::joyn(dsm_table, 
+                   dist_table, 
+                   match_type = "1:1",
+                   by = c("cache_id","pop_data_level","reporting_level","area"),
+                   reportvar = FALSE)
+  
+  # Merge with GDP
+  dt <- data.table::merge.data.table(
+    dt, gdp_table,
+    all.x = TRUE,
+    by.x = c("country_code", "reporting_year", "gdp_data_level"),
+    by.y = c("country_code", "year", "gdp_data_level")
+  )
+  
+  # Merge with PCE
+  
+  
+  dt <- data.table::merge.data.table(
+    dt, pce_table,
+    all.x = TRUE,
+    by.x = c("country_code", "reporting_year", "pce_data_level"),
+    by.y = c("country_code", "year", "pce_data_level")
+  )
+  
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Warnings --------
+  
+  # Remove rows with missing survey_mean_ppp
+  # This shouldn't be the case
+  # A problem with PHL 2009
+  if (anyNA(dt$survey_mean_ppp)) {
+    rlang::warn(c(
+      sprintf(
+        "Removing %s rows with missing `survey_mean_ppp`: ",
+        sum(is.na(dt$survey_mean_ppp))
+      ),
+      unique(dt[is.na(survey_mean_ppp)]$cache_id)
+    ))
+    dt <- dt[!is.na(survey_mean_ppp), ]
+  }
+  
+  # Remove rows with missing ppp
+  # CHN, IDN, why?
+  if (anyNA(dt$ppp)) {
+    rlang::warn(c(
+      sprintf(
+        "Removing %s rows with missing `ppp`:",
+        sum(is.na(dt$ppp))
+      ),
+      unique(dt[is.na(ppp)]$cache_id)
+    ))
+    dt <- dt[!is.na(ppp), ]
+  }
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Finalize table --------
+  
+  # Fix and add columns
+  dt$estimation_type <- "survey"
+  dt$predicted_mean_ppp <- numeric(0)
+  dt <- data.table::setnames(dt, 
+                             c("gdp", "pce", "pcn_region_code"),
+                             c("reporting_gdp", "reporting_pce", "region_code")
+  )
+  
+  # Order final columns
+  cols <- c(
+    "survey_id", "cache_id", "region_code", "wb_region_code",
+    "country_code", "reporting_year", "surveyid_year",
+    "survey_year", "survey_time", "survey_acronym", "survey_coverage",
+    "survey_comparability", "comparable_spell", "welfare_type",
+    "reporting_level", "area",
+    "survey_mean_lcu", "survey_mean_ppp",
+    "survey_median_ppp", "survey_median_lcu",
+    "predicted_mean_ppp", "ppp", "cpi",
+    "reporting_pop", "reporting_gdp",
+    "reporting_pce", "pop_data_level",
+    "gdp_data_level", "pce_data_level",
+    "cpi_data_level", "ppp_data_level",
+    "distribution_type", "gd_type",
+    "is_interpolated",
+    "is_used_for_line_up", "is_used_for_aggregation",
+    "estimation_type",
+    "display_cp"
+  )
+  dt <- dt[, .SD, .SDcols = cols]
+  
+  return(dt)
+}
 
 
 

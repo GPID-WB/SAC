@@ -36,7 +36,7 @@ max_year_aggregate <- 2022
 if (Sys.info()['user'] ==  "wb535623") {
   
   #Need to add Povcalnet if in remote computer
-  base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+  base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
   
 } else if (Sys.info()['user'] ==  "wb622077") {
   
@@ -74,7 +74,7 @@ base_dir |>
 if (Sys.info()['user'] ==  "wb535623") {
   
   #Need to add Povcalnet if in remote computer
-  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache") 
+  gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
   
 } else if (Sys.info()['user'] ==  "wb622077") {
   
@@ -112,6 +112,8 @@ cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_20
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Note: Each function is better described in Functions_SAC.R 
 
 source("Functions_SAC.R")
 
@@ -180,7 +182,7 @@ Means_pipeline_tar <- function(cache_inventory,
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2. Replication Means  ---------
+# 2. Replication Survey Means  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Load output:
@@ -209,7 +211,7 @@ waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3. Dist_Stats   ---------
+# 3. Dist Stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -263,37 +265,39 @@ Dist_stats_tar <- function(cache,
 
 # Load output:
 dist_out_sac <- Dist_stats_sac(cache_tb, 
-                          out_sac)
+                          means_out_sac)
 
 dist_out_tar <- Dist_stats_tar(cache,
-                          out_tar,
+                          means_out_tar,
                           dl_aux,
                           cache_ids,
                           py,
                           cache_inventory)
 
 # Filter without new area-level calculations
-compare_sac <- out_sac[out_sac$reporting_level == out_sac$area, -c("area")]
+compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]
 
 # Eliminate attributes 
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
-# Set similar keys
-setkey(out_tar, "country_code")
-setkey(compare_sac, "country_code")
-
 # Order rows
 data.table::setorder(compare_sac, cache_id, reporting_level)
-data.table::setorder(out_tar, cache_id, reporting_level)
+data.table::setorder(dist_out_tar, cache_id, reporting_level)
+
+# Set similar keys
+setkey(dist_out_tar, "country_code")
+setkey(compare_sac, "country_code")
 
 # Comparison
-all.equal(out_tar,compare_sac)
+all.equal(dist_out_tar,compare_sac)
 
-waldo::compare(out_tar,compare_sac, tolerance = 1e-7)
+waldo::compare(dist_out_tar,compare_sac, tolerance = 1e-7)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. Prod_svy_estimation   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# IMPORTANT NOTE: Both functions give the same warning on CHN missing ppp
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 5.1 SAC --------

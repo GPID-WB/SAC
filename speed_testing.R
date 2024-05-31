@@ -28,16 +28,17 @@ if (requireNamespace("highcharter")) {
 
 bench_dist <- microbenchmark::microbenchmark(
   times = 100,
-  dt = {
-    new_value = mp_dl_dist_stats_sac(dt = cache_tb, 
-                                     mean_table = svy_mean_ppp_table_sac)
+  SAC = {
+    new_value = Dist_stats_sac(cache_tb,
+                               means_out_sac)
   },
-  collapse = {
-    old_value = mp_dl_dist_stats(dt         = cache,
-                                 mean_table = svy_mean_ppp_table_tar,
-                                 pop_table  = dl_aux$pop,
-                                 cache_id   = cache_ids, 
-                                 ppp_year   = py)
+  Nested = {
+    old_value = Dist_stats_tar(cache,
+                               means_out_tar,
+                               dl_aux,
+                               cache_ids, 
+                               py,
+                               cache_inventory)
   })
 
 
@@ -52,7 +53,7 @@ if (requireNamespace("highcharter")) {
     highcharter::hc_xAxis(type = "category") |>
     highcharter::hc_chart(inverted=TRUE) |>
     highcharter::hc_add_series_list(hc_dt) |>
-    highcharter::hc_title(text = "Comparison dist_stats")
+    highcharter::hc_title(text = "Comparison SAC vs Nested (Dist Stats)")
   
 } else {
   boxplot(bench, outline = FALSE)

@@ -2,11 +2,15 @@
 # Install packages   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# install.packages(c("conflicted", "dotenv", "targets", "tarchetypes",
+# "bs4Dash", "clustermq", "future", "gt", "pingr", "shinycssloaders",
+# "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr"))
+
 # remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
 # remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
 
-# pak::pak("PIP-Technical-Team/pipfun@ongoing", ask = FALSE)
-# pak::pak("PIP-Technical-Team/pipload@ongoing", ask = FALSE)
+# remotes::install_github("PIP-Technical-Team/pipfun@ongoing")
+# remotes::install_github("PIP-Technical-Team/pipload@ongoing")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Defaults   ---------
@@ -20,6 +24,7 @@ max_year_country   <- 2022
 max_year_aggregate <- 2022
 
 
+
 if (Sys.info()['user'] ==  "wb535623") {
   
   base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
@@ -28,6 +33,7 @@ if (Sys.info()['user'] ==  "wb535623") {
   
   base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
 }
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -58,7 +64,7 @@ base_dir |>
 
 
 #gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
+gls$CACHE_SVY_DIR_PC <- fs::path("E:/PovcalNet/01.personal/wb535623/PIP/Cache")
 
 # base_dir |>
 #   fs::path("_cache_loading_saving.R") |>
@@ -923,6 +929,7 @@ dl_dist_stats_sac <- mp_dl_dist_stats_sac(dt = cache_tb,
 
 
 # 2. Add additional variables:
+
 dt_dist_stats_tar <- db_create_dist_table(dl        = dl_dist_stats_tar,
                                           dsm_table = svy_mean_ppp_table_tar, 
                                           crr_inv   = cache_inventory)

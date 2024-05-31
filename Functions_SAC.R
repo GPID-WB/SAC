@@ -1,69 +1,5 @@
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Project:       SAC Functions for PIP pipeline
-# Author:        Giorgia Cecchinato and Diana C. Garcia Rojas
-# Dependencies:  The World Bank
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Creation Date:    May 2024
-# References:
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Install packages   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
-# remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
-
-# pak::pak("PIP-Technical-Team/pipfun@ongoing", ask = FALSE)
-# pak::pak("PIP-Technical-Team/pipload@ongoing", ask = FALSE)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Defaults   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-py                 <- 2017  # PPP year
-branch             <- "DEV"
-release            <- "20240326"  
-identity           <- "PROD"
-max_year_country   <- 2022
-max_year_aggregate <- 2022
-
-#base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-base_dir <- fs::path("E:/01.personal/wb535623/PIP/pip_ingestion_pipeline")
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 0. Load Packages and Data  ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-withr::with_dir(new = base_dir, 
-                code = {
-                  # source("./_packages.R")
-                  
-                  # Load R files
-                  purrr::walk(fs::dir_ls(path = "./R", 
-                                         regexp = "\\.R$"), source)
-                  
-                  # Read pipdm functions
-                  purrr::walk(fs::dir_ls(path = "./R/pipdm/R", 
-                                         regexp = "\\.R$"), source)
-                })
-
-base_dir |>
-  fs::path("_common.R") |>
-  source(echo = FALSE)
-
-## Change gls outdir:
-
-#gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb535623/PIP/Cache")
-
-## Cache data for Nigeria --------
-
-cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[cache_inventory$cache_id %like% "NGA",]
- 
-cache <- pipload::pip_load_cache("NGA", version = '20240326_2017_01_02_PROD') 
-cache_ids <- get_cache_id(cache_inventory) 
+# ---------------------------- FUNCTIONS SAC -------------------------
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 #  1. Survey_means  ---------
@@ -88,7 +24,7 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
                     keep       = "left")
   
   data.table::setorder(dt., cache_id, pop_data_level)
-  gd_means        <- dt.[,.(cache_id, survey_mean_lcu)]
+  gd_means        <- dt.[,.(cache_id, pop_data_level, survey_mean_lcu)]
   gd_means        <- gd_means[,survey_mean_lcu:= survey_mean_lcu*(12/365)]
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -97,21 +33,19 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
   return(gd_means)
 }
 
-gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, gdm = dl_aux$gdm)
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_lcu --------
 ##
 ## Objective:  Local Currency Unit survey mean list
 
-db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
+db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # computations   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
   # Select variables
-  dt <- cache[, .(welfare, weight, survey_id, cache_id, country_code, 
+  dt <- cache_tb[, .(welfare, weight, survey_id, cache_id, country_code, 
                      surveyid_year, survey_acronym, survey_year, welfare_type,
                      distribution_type, gd_type, imputation_id, cpi_data_level, 
                      ppp_data_level, gdp_data_level, pce_data_level, 
@@ -148,7 +82,7 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   # For national
   
   dt_nat <- dt_m |>
-    fsubset(area != "national")|>
+    fsubset(area != "national" & reporting_level == "national")|>
     fgroup_by(cache_id, reporting_level)|>
     fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
                weight = fsum(weight),
@@ -194,8 +128,6 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   return(dt_c)
   
 }
-
-svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, gd_mean = gd_means_sac)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_lcu_table --------
@@ -248,57 +180,17 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   
   #--------- Merge with POP ---------
   
-  # Create nested POP table
-  pop_table$pop_domain <- NULL
-  pop_nested <- pop_table %>%
-    tidyfast::dt_nest(country_code, pop_data_level, .key = "data")
+  pop_table$pop_domain <- NULL 
   
-  # Merge dt with pop_nested (add survey_pop)
-  dt <- joyn::joyn(dt, pop_nested,
-                   by = c("country_code", "pop_data_level"),
-                   match_type = "m:1"
-  )
-  #NOTE DC: Should we use area to include rural/urban population?
+  # --- Reporting_pop ----
   
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure POP data includes all the countries and pop data levels"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  dt <- dt[
-    .joyn != "y"
-  ][, .joyn := NULL]
-  
-  # Transform survey_year to numeric
-  dt[
-    ,
-    survey_year := as.numeric(survey_year)
-  ]
-  
-  # Adjust population values for surveys spanning two calender years
-  dt$survey_pop <-
-    purrr::map2_dbl(dt$survey_year, dt$data,
-                    adjust_aux_values,
-                    value_var = "pop"
-    )
-  # Note DC: check how to optimize so we don't need to use lists.
-  
-  # Remove nested data column
-  dt$data <- NULL
-  
-  # Merge with pop_table (add reporting_pop)
   dt <- joyn::joyn(dt, pop_table,
-                   by = c(
-                     "country_code",
-                     "reporting_year = year",
-                     "pop_data_level"
+                   by = c("country_code", 
+                          "reporting_year = year",
+                          "area = pop_data_level"
                    ),
-                   match_type = "m:1"
+                   match_type = "m:1",
+                   keep = "left"
   )
   
   if (nrow(dt[.joyn == "x"]) > 0) {
@@ -311,13 +203,49 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     class = "pipdm_error"
     )
   }
-  dt <- dt[
-    .joyn != "y" # All country/years for which we don't have data... its ox.
-  ][, .joyn := NULL]
   
+  dt <- dt[
+    .joyn != "y" ][, .joyn := NULL]
   
   data.table::setnames(dt, "pop", "reporting_pop")
   
+  # ---- Survey_pop ----
+  
+  dt_svy_pop <- dt[survey_year != floor(survey_year),] |>
+    rowbind(dt[survey_year != floor(survey_year),], idcol = "id")|>
+    fmutate(year_rnd = case_when(id == 1 ~ ceiling(survey_year),
+                                 id == 2 ~ floor(survey_year),
+                                 .default = NA_integer_),
+            diff = 1 - abs(survey_year-year_rnd))|>
+    joyn::joyn(pop_table, # Need warning in case join == x
+               by = c("country_code", 
+                      "year_rnd = year",
+                      "area = pop_data_level"
+               ),
+               match_type = "m:1",
+               keep = "left"
+    ) |>
+    fgroup_by(survey_id, country_code, survey_year,
+              reporting_level, area)|>
+    fsummarize(survey_pop = fmean(pop, w = diff))|>
+    fungroup()
+  
+  dt <- joyn::joyn(dt, dt_svy_pop,
+                   by = c("survey_id", 
+                          "country_code", 
+                          "survey_year",
+                          "reporting_level",
+                          "area"
+                   ),
+                   match_type = "m:1",
+                   keep = "left"
+  )
+  
+  dt <- dt[
+    .joyn != "y" ][, .joyn := NULL]
+  
+  dt <- ftransform(dt, survey_pop = fifelse(is.na(survey_pop), 
+                                            reporting_pop, survey_pop))
   
   # ---- Finalize table ----
   
@@ -339,10 +267,6 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   return(dt)
   
 }
-
-svy_mean_lcu_table_sac <- db_create_lcu_table_sac(dt = svy_mean_lcu_sac,
-                                                  pop_table = dl_aux$pop,
-                                                  pfw_table = dl_aux$pfw) 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_ppp_table --------
@@ -417,23 +341,12 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
     )
   }
   
-  
-  cdt <- dt[, unique(country_code)]
-  cppp <- jn[.joyn == "y", unique(country_code)]
-  
   dt <- jn[
     .joyn != "y" # Countries in PPP table for which we don't have data
   ][, .joyn := NULL]
   
   #--------- Deflate welfare mean ---------
   
-  # svy_mean_ppp = survey_mean_lcu / cpi / ppp
-  # dt$survey_mean_ppp <-
-  #   wbpip::deflate_welfare_mean(
-  #     welfare_mean = dt$survey_mean_lcu, ppp = dt$ppp, cpi = dt$cpi
-  #   )
-  # Note: Do we need the function? Faster without it?
-  # Example: 
   dt <- dt|>
     fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
   
@@ -454,7 +367,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   dt$is_interpolated <- FALSE
   
   # Add is_used_for_line_up column
-  dt_lu <- dt[area=="national"][, n_rl := .N, by = cache_id]
+  
+  dt_lu <- dt[area=="national" | reporting_level == area]
   
   dt_lu <- create_line_up_check(dt_lu)
   
@@ -464,7 +378,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                    y_vars_to_keep = "is_used_for_line_up"
   )
   
-  dt[is.na(is_used_for_line_up),is_used_for_line_up := FALSE]
+  dt <- dt[is.na(is_used_for_line_up),
+           is_used_for_line_up := FALSE]
   
   dt <- dt[
     .joyn != "y" 
@@ -472,7 +387,9 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]
-  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% c("urban", "rural") & dt$n_rl == 2), TRUE, FALSE)]
+  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% 
+                                            c("urban", "rural") & 
+                                            dt$n_rl == 2), TRUE, FALSE)]
   dt$n_rl <- NULL
   
   # Select and order columns
@@ -498,6 +415,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   # Add aggregated mean for surveys split by Urban/Rural 
   
   if(any(dt$is_used_for_aggregation==TRUE)){
+    
     # Select rows w/ non-national pop_data_level
     dt_sub <- dt[is_used_for_aggregation == TRUE]
     
@@ -509,12 +427,16 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                                                      w = reporting_pop),
                              ppp                     = NA,  
                              cpi                     = NA,
+                             area                    = "national",
                              pop_data_level          = "national", 
                              gdp_data_level          = "national",
                              pce_data_level          = "national",
                              cpi_data_level          = "national",
                              ppp_data_level          = "national",
-                             reporting_level         = "national"),
+                             reporting_level         = "national",
+                             is_interpolated         = FALSE,
+                             is_used_for_line_up     = FALSE,
+                             is_used_for_aggregation = FALSE),
                      by = .(survey_id, cache_id) ]
     
     
@@ -536,10 +458,6 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   return(dt)
 }
-
-svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
-                                                  cpi_table = dl_aux$cpi,
-                                                  ppp_table = dl_aux$ppp)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2. Dist_stats   ---------

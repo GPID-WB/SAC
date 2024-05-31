@@ -104,7 +104,7 @@ cache_ids <- get_cache_id(cache_inventory)
 ### Full Cache ---------
 
 # In list format:
-cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
 
 # In dt format:
 cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
@@ -187,10 +187,10 @@ Means_pipeline_tar <- function(cache_inventory,
 
 # Load output:
 means_out_sac <- Means_pipeline_sac(cache_inventory, 
-                                    cache, 
+                                    cache_tb, 
                                     dl_aux)
 means_out_tar <- Means_pipeline_tar(cache_inventory, 
-                                    cache, 
+                                    cache_ls, 
                                     dl_aux)
 
 # Filter without new area-level calculations
@@ -201,8 +201,8 @@ compare_sac <- means_out_sac[means_out_sac$area == "national" |
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
-data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level, area)
+data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level, area)
 
 # Comparison
 all.equal(means_out_tar,compare_sac)
@@ -267,7 +267,7 @@ Dist_stats_tar <- function(cache,
 dist_out_sac <- Dist_stats_sac(cache_tb, 
                           means_out_sac)
 
-dist_out_tar <- Dist_stats_tar(cache,
+dist_out_tar <- Dist_stats_tar(cache_ls,
                           means_out_tar,
                           dl_aux,
                           cache_ids,

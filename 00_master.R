@@ -96,18 +96,16 @@ if (Sys.info()['user'] ==  "wb535623") {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
-                                      cache_inventory$cache_id %like% "BOL" |
-                                      cache_inventory$cache_id %like% "NGA"),]
+cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "PRY"),]
 cache_ids <- get_cache_id(cache_inventory) 
 
 ### Full Cache ---------
 
 # In list format:
-cache <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+cache <- pipload::pip_load_cache("PRY", type="list", version = '20240326_2017_01_02_PROD') 
 
 # In dt format:
-cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------

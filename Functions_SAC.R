@@ -476,11 +476,14 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 db_dist_stats_sac <- function(dt, mean_table){
   
   # 1. Fill area with national when empty ----
+  # (Diana comment: We could create another cache from the beginning (before means)
+  # with this change)
   dt <- ftransform(dt, area = ifelse(as.character(area) == "", # if empty
                                      "national", # it gets national
                                      as.character(area))) # else it keeps area
     
-    # 3. Micro and Imputed Data: Level & Area Estimation  ----
+    # 2. Micro and Imputed Data: Level & Area Estimation  ----
+  
     md_id_area <- dt |>
       fselect(cache_id, distribution_type, reporting_level, imputation_id, 
               area, weight, welfare_ppp) |>
@@ -494,7 +497,7 @@ db_dist_stats_sac <- function(dt, mean_table){
       _[, c(.SD, .( 
         Statistic = names(unlist(res)), 
         Value = unlist(res))),
-        by = .(cache_id, imputation_id, reporting_level, area, weight)] |>
+        by = .(cache_id, imputation_id, reporting_level, area, weight)]|>
       fselect(-res)|>
       pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
       fgroup_by(cache_id, reporting_level, area)|>
@@ -502,6 +505,37 @@ db_dist_stats_sac <- function(dt, mean_table){
       fungroup()|>
       frename(survey_median_ppp = median)|>
       fmutate(reporting_level = as.character(reporting_level))
+    
+    
+    md_id_area2 <- dt |>
+      fselect(cache_id, distribution_type, reporting_level, imputation_id, 
+              area, weight, welfare_ppp) |>
+      fsubset(distribution_type %in% c("micro", "imputed")) |>
+      fselect(-distribution_type)|>
+      roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
+      fgroup_by(cache_id, imputation_id, reporting_level, area)|>
+      fsummarize(res = list(wbpip:::md_compute_dist_stats(  
+        welfare = welfare_ppp,
+        weight = weight)))
+      # 
+      # BY(FUN = wbpip:::md_compute_dist_stats(  
+      #   welfare = x,
+      #   weight = y))
+      # 
+      # dapply(md_id_area2, wbpip:::md_compute_dist_stats(  
+      #   welfare = "welfare_ppp",
+      #   weight = "weight"))
+      
+    # Steps:
+    # 1. make output a data.table
+    test <- wbpip:::md_compute_dist_stats(  
+      welfare = dt$welfare_ppp,
+      weight = dt$weight)
+    test1 <- data.table::transpose(unlist2d(test, DT= TRUE), make.names = ".id", keep.names = "id")
+    test2 <- collapse::pivot(setnafill(test1, "locf", cols = 2:6),
+                             ids = 2:6, names = "id", how = "w", values = "quantiles", na.rm = TRUE) 
+    
+    # 2. Create a function that wraps this values   
     
     setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))
     
@@ -531,7 +565,7 @@ db_dist_stats_sac <- function(dt, mean_table){
     
     setrename(md_id_national, gsub("quantiles", "decile", names(md_id_national)))
     
-    if(any(dt$distribution_type %in% c("group", "aggregate"))){
+    if(anyv(dt$distribution_type %in% c("group", "aggregate"))){
       
       # 5. Group and Aggregate Data: Level and Area Estimation -----
       gd_ag_area <- dt |>

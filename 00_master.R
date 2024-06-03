@@ -96,16 +96,18 @@ if (Sys.info()['user'] ==  "wb535623") {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "PRY"),]
+cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
+                                       cache_inventory$cache_id %like% "BOL" |
+                                       cache_inventory$cache_id %like% "NGA"),]
 cache_ids <- get_cache_id(cache_inventory) 
 
 ### Full Cache ---------
 
 # In list format:
-cache <- pipload::pip_load_cache("PRY", type="list", version = '20240326_2017_01_02_PROD') 
+cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
 
 # In dt format:
-cache_tb <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
@@ -199,8 +201,8 @@ compare_sac <- means_out_sac[means_out_sac$area == "national" |
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level, area)
-data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level, area)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
+data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
 
 # Comparison
 all.equal(means_out_tar,compare_sac)
@@ -262,15 +264,15 @@ Dist_stats_tar <- function(cache,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Load output:
-dist_out_sac <- Dist_stats_sac(cache_tb, 
-                          means_out_sac)
+dist_out_sac <- Dist_stats_sac(dt = cache_tb, 
+                               dsm_table = means_out_sac)
 
-dist_out_tar <- Dist_stats_tar(cache_ls,
-                          means_out_tar,
-                          dl_aux,
-                          cache_ids,
-                          py,
-                          cache_inventory)
+dist_out_tar <- Dist_stats_tar(cache = cache_ls,
+                               dsm_table = means_out_tar,
+                               dl_aux = dl_aux,
+                               cache_ids = cache_ids,
+                               py = py,
+                               cache_inventory = cache_inventory)
 
 # Filter without new area-level calculations
 compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]

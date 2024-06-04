@@ -96,16 +96,18 @@ if (Sys.info()['user'] ==  "wb535623") {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
-cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "PRY"),]
+cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
+                                       cache_inventory$cache_id %like% "BOL" |
+                                       cache_inventory$cache_id %like% "NGA"),]
 cache_ids <- get_cache_id(cache_inventory) 
 
 ### Full Cache ---------
 
 # In list format:
-cache <- pipload::pip_load_cache("PRY", type="list", version = '20240326_2017_01_02_PROD') 
+cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
 
 # In dt format:
-cache_tb <- pipload::pip_load_cache("PRY", version = '20240326_2017_01_02_PROD') 
+cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
@@ -136,7 +138,7 @@ Means_pipeline_sac <- function(cache_inventory,
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Means in LCU --------
   
-  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_tb, 
+  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, 
                                                  gd_mean = gd_means_sac)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,10 +187,10 @@ Means_pipeline_tar <- function(cache_inventory,
 
 # Load output:
 means_out_sac <- Means_pipeline_sac(cache_inventory, 
-                                    cache, 
+                                    cache_tb, 
                                     dl_aux)
 means_out_tar <- Means_pipeline_tar(cache_inventory, 
-                                    cache, 
+                                    cache_ls, 
                                     dl_aux)
 
 # Filter without new area-level calculations
@@ -262,15 +264,15 @@ Dist_stats_tar <- function(cache,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Load output:
-dist_out_sac <- Dist_stats_sac(cache_tb, 
-                          means_out_sac)
+dist_out_sac <- Dist_stats_sac(cache = cache_tb, 
+                               dsm_table = means_out_sac)
 
-dist_out_tar <- Dist_stats_tar(cache,
-                          means_out_tar,
-                          dl_aux,
-                          cache_ids,
-                          py,
-                          cache_inventory)
+dist_out_tar <- Dist_stats_tar(cache = cache_ls,
+                               dsm_table = means_out_tar,
+                               dl_aux = dl_aux,
+                               cache_ids = cache_ids,
+                               py = py,
+                               cache_inventory = cache_inventory)
 
 # Filter without new area-level calculations
 compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]

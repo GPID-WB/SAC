@@ -38,93 +38,117 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
 ##
 ## Objective:  Local Currency Unit survey mean list
 
-db_compute_survey_mean_sac <- function(cache_tb, gd_mean = NULL) {
+db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # computations   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
   # Select variables
-  dt <- cache_tb[, .(welfare, weight, survey_id, cache_id, country_code, 
+  dt <- cache[, .(welfare, weight, survey_id, cache_id, country_code, 
                      surveyid_year, survey_acronym, survey_year, welfare_type,
                      distribution_type, gd_type, imputation_id, cpi_data_level, 
                      ppp_data_level, gdp_data_level, pce_data_level, 
                      pop_data_level, reporting_level, area)]
   
-  keep_vars <- c("survey_id", "country_code", "surveyid_year", 
-                 "survey_acronym","survey_year", "welfare_type", 
-                 "distribution_type","gd_type","cpi_data_level",
-                 "ppp_data_level", "gdp_data_level", 
-                 "pce_data_level", "pop_data_level")
-  
   # Modify the area variable for imputed or group
   
   levels(dt$area)[levels(dt$area)==""] <- "national"
   
-  # Need to fix this if not same as reference_level (aggregate)
-  
-  # dt[, area := ifelse(reporting_level!=area, reporting_level, area)] 
-  
-  # For micro data
+  # ------ Micro data urban/rural -----
   
   dt_m <- dt |>
     fsubset(distribution_type=="imputed" | distribution_type == "micro")|> 
     fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
-    fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
-               weight = fsum(weight),
-               across(keep_vars, funique))|>
+    # fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
+    #            weight = fsum(weight),
+    #            across(keep_vars, funique))|>
+    collapg(custom = list(fmean = c(survey_mean_lcu = 1)), w = weight)|>
     fgroup_by(cache_id, reporting_level, area)|>
-    fsummarize(across(c(keep_vars), funique), 
-               survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
-               weight = fsum(weight))|>
-    fungroup()
+    # fsummarize(across(c(keep_vars), funique), 
+    #            survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
+    #            weight = fsum(weight))|>
+    collapg(custom = list(fmean = c(survey_mean_lcu = 6)), w = weight)|>
+    fungroup()|>
+    collapse::join(dt |> fselect("cache_id", "reporting_level", "area",
+                                 "survey_id", "country_code", "surveyid_year", 
+                                 "survey_acronym","survey_year", "welfare_type", 
+                                 "distribution_type","gd_type","cpi_data_level",
+                                 "ppp_data_level", "gdp_data_level", 
+                                 "pce_data_level", "pop_data_level"),
+                   on= c("cache_id", "reporting_level", "area"), 
+                   validate = "1:m",
+                   how = "inner",
+                   verbose = 0)
   
-  # For national
+  # ----- Micro data national -----
   
   dt_nat <- dt_m |>
     fsubset(area != "national" & reporting_level == "national")|>
     fgroup_by(cache_id, reporting_level)|>
-    fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
-               weight = fsum(weight),
-               across(c(keep_vars), funique))|>
+    # fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
+    #            weight = fsum(weight),
+    #            across(c(keep_vars), funique))|>
+    collapg(custom = list(fmean = c(survey_mean_lcu = 5)), w = weight)|>
     fungroup()|>
+    collapse::join(dt |> fselect("cache_id", "reporting_level",
+                                 "survey_id", "country_code", "surveyid_year", 
+                                 "survey_acronym","survey_year", "welfare_type", 
+                                 "distribution_type","gd_type","cpi_data_level",
+                                 "ppp_data_level", "gdp_data_level", 
+                                 "pce_data_level", "pop_data_level"),
+                   on= c("cache_id", "reporting_level"), 
+                   validate = "1:m",
+                   how = "inner",
+                   verbose = 0)|>
     fmutate(area = factor("national"))
   
-  # For group
+  # All micro and imputed data
   
-  dt_g <- dt |>
-    fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
-    joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
-               by = c(
-                 "cache_id", "pop_data_level"
-               ),
-               y_vars_to_keep = "survey_mean_lcu",
-               match_type = "m:1", keep = "left", 
-               reportvar = FALSE, sort = FALSE)|>
-    fgroup_by(cache_id, reporting_level, pop_data_level)|>
-    fsummarize(across(c(keep_vars[!(keep_vars %in% "pop_data_level")], "area",  
-                        "survey_mean_lcu"), funique),
-               weight = fsum(weight))
+  dt_c <- collapse::rowbind(dt_m, dt_nat)
   
-  dt_c <- collapse::rowbind(dt_m, dt_nat, dt_g)
-  # Note: We can eliminate dt_g if needed.
+  #  ------ Group data -----
   
-  dt_c <- dt_c|>
-    ftransform(area = factor(as.character(area), levels = union(levels(area), levels(reporting_level))),
-               reporting_level = factor(as.character(reporting_level), levels = union(levels(area), levels(reporting_level)))) 
+  if(any(dt$distribution_type %in% c("group", "aggregate"))){
+    
+    
+    keep_vars <- c("survey_id", "country_code", "surveyid_year", 
+                   "survey_acronym","survey_year", "welfare_type", 
+                   "distribution_type","gd_type","cpi_data_level",
+                   "ppp_data_level", "gdp_data_level", 
+                   "pce_data_level", "pop_data_level")
+    
+    dt_g <- dt |>
+      fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
+      joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
+                 by = c(
+                   "cache_id", "pop_data_level"
+                 ),
+                 y_vars_to_keep = "survey_mean_lcu",
+                 match_type = "m:1", keep = "left", 
+                 reportvar = FALSE, sort = FALSE)|>
+      fgroup_by(cache_id, reporting_level, pop_data_level)|>
+      fsummarize(across(c(keep_vars[!(keep_vars %in% "pop_data_level")], "area",  
+                          "survey_mean_lcu"), funique),
+                 weight = fsum(weight))
+    
+    dt_c <- collapse::rowbind(dt_c, dt_g) # Note: We can eliminate dt_g if needed.
+    
+  }
+
+  # ----- Finalize table -----
   
-  # Order rows
-  dt_c <- dt_c|>
+  dt_c <- dt_c |> 
+    # ftransform(area = factor(as.character(area), # In case levels are different 
+    #                          levels = union(levels(area), #between area and reporting_level
+    #                                         levels(reporting_level))),
+    #            reporting_level = factor(as.character(reporting_level),
+    #                                     levels = union(levels(area),
+    #                                                    levels(reporting_level))))|>
     roworder(survey_id, country_code, surveyid_year, survey_acronym,
-             survey_year, welfare_type)
-  
-  # Order columns
-  data.table::setcolorder(
-    dt_c, c(
-      "survey_id", "country_code", "surveyid_year", "survey_acronym",
-      "survey_year", "welfare_type"
-    )
-  )
+             survey_year, welfare_type) |> # Order rows
+    colorder(survey_id, country_code, surveyid_year, survey_acronym,
+             survey_year, welfare_type) # Order columns
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
@@ -221,7 +245,7 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                                  id == 2 ~ floor(survey_year),
                                  .default = NA_integer_),
             diff = 1 - abs(survey_year-year_rnd))|>
-    joyn::joyn(pop_table, # Need warning in case join == x
+    joyn::joyn(pop_table, # Do we need warning in case join == x?
                by = c("country_code", 
                       "year_rnd = year",
                       "area = pop_data_level"
@@ -248,23 +272,17 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   dt <- dt[
     .joyn != "y" ][, .joyn := NULL]
   
-  dt <- ftransform(dt, survey_pop = fifelse(is.na(survey_pop), 
-                                            reporting_pop, survey_pop))
-  
   # ---- Finalize table ----
   
-  # Sort rows
-  data.table::setorder(dt, country_code, surveyid_year, survey_acronym)
+  dt <- dt |>
+    ftransform(survey_pop = fifelse(is.na(survey_pop), 
+                                    reporting_pop, survey_pop))|>
+    roworder(country_code, surveyid_year, survey_acronym)|>
+    colorder(survey_id, cache_id , country_code, surveyid_year, survey_acronym,
+             survey_year, welfare_type, survey_mean_lcu, survey_pop,
+             reporting_pop)
   
-  # Order columns
-  data.table::setcolorder(
-    dt, c(
-      "survey_id", "cache_id", "country_code", "surveyid_year", "survey_acronym",
-      "survey_year", "welfare_type", "survey_mean_lcu", "survey_pop",
-      "reporting_pop"
-    )
-  )
-  
+
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -351,8 +369,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   #--------- Deflate welfare mean ---------
   
-  dt <- dt|>
-    fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+  dt <- fmutate(dt, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
   
   
   #--------- Add comparable spell --------- ## 

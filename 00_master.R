@@ -138,7 +138,7 @@ Means_pipeline_sac <- function(cache_inventory,
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Means in LCU --------
   
-  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_tb, 
+  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, 
                                                  gd_mean = gd_means_sac)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -167,7 +167,7 @@ Means_pipeline_tar <- function(cache_inventory,
   gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
                                       gdm = dl_aux$gdm)
   
-  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache_ls, 
+  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, 
                                       gd_means_tar) 
   
   svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,

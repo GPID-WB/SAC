@@ -468,110 +468,137 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 2.0 wrp_md_dist_stats (not used) -----
+##
+## Objective: Wrapper for wbpip function `wbpip::md_compute_dist_stats` and 
+## transform results to data.table: 
+## (Diana comment: If this works it could be implemented in wbpip)
+
+# wrp_md_dist_stats <- function(welfare,
+#                               weight) {
+# 
+#   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   # computations   ---------
+#   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   dl <- wbpip:::md_compute_dist_stats(
+#     welfare = welfare,
+#     weight = weight)
+#   dt <- unlist2d(dl, DT= TRUE)
+#   colnames(dt) <- c("name", paste0("decile", 1:10) )
+#   dt <- data.table::transpose(dt, make.names = "name", keep.names = "id")
+#   dt <- collapse::pivot(setnafill(dt, "locf", cols = 2:6),
+#                         ids = 2:6, names = "id", how = "w", values = "quantiles", na.rm = TRUE)
+# 
+#   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   # Return   ---------
+#   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   return(dt)
+# 
+# }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 2.1 db_dist_stats_sac --------
 ##
 ## Objective: Calculate distributional statistics at the national and area level
-## Note: This function is missing the warnings in the old pipeline
+## Note: This function is missing the warnings from the old pipeline
 
 db_dist_stats_sac <- function(dt, mean_table){
   
-  # 1. Fill area with national when empty ----
-  # (Diana comment: We could create another cache from the beginning (before means)
-  # with this change)
+  # 1. Fill area with national when empty and select variables ----
+
   dt <- ftransform(dt, area = ifelse(as.character(area) == "", # if empty
                                      "national", # it gets national
-                                     as.character(area))) # else it keeps area
+                                     as.character(area)))|> # else it keeps area
+    fselect(cache_id, distribution_type, reporting_level, imputation_id,
+            area, weight, welfare_ppp, welfare)
     
     # 2. Micro and Imputed Data: Level & Area Estimation  ----
   
     md_id_area <- dt |>
-      fselect(cache_id, distribution_type, reporting_level, imputation_id, 
-              area, weight, welfare_ppp) |>
       fsubset(distribution_type %in% c("micro", "imputed")) |>
+      fselect(-c(distribution_type,welfare))|>
       roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
-      fgroup_by(cache_id, imputation_id, reporting_level, area)|> 
-      fsummarise(res = list(wbpip:::md_compute_dist_stats(  
+      fgroup_by(cache_id, imputation_id, reporting_level, area)|>
+      fsummarise(res = list(wbpip:::md_compute_dist_stats(
         welfare = welfare_ppp,
-        weight = weight)),
-        weight = fsum(weight))|>
-      _[, c(.SD, .( 
-        Statistic = names(unlist(res)), 
+        weight = weight)))|>
+      _[, c(.SD, .(
+        Statistic = names(unlist(res)),
         Value = unlist(res))),
-        by = .(cache_id, imputation_id, reporting_level, area, weight)]|>
+        by = .(cache_id, imputation_id, reporting_level, area)]|>
       fselect(-res)|>
       pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
       fgroup_by(cache_id, reporting_level, area)|>
-      fsummarise(across(weight:quantiles10, fmean))|> 
+      collapg(custom= list(fmean= 6:20))|> # If we don't use windows we could use `parallel = TRUE`
       fungroup()|>
       frename(survey_median_ppp = median)|>
       fmutate(reporting_level = as.character(reporting_level))
-    
-    
-    md_id_area2 <- dt |>
-      fselect(cache_id, distribution_type, reporting_level, imputation_id, 
-              area, weight, welfare_ppp) |>
-      fsubset(distribution_type %in% c("micro", "imputed")) |>
-      fselect(-distribution_type)|>
-      roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
-      fgroup_by(cache_id, imputation_id, reporting_level, area)|>
-      fsummarize(res = list(wbpip:::md_compute_dist_stats(  
-        welfare = welfare_ppp,
-        weight = weight)))
-      # 
-      # BY(FUN = wbpip:::md_compute_dist_stats(  
-      #   welfare = x,
-      #   weight = y))
-      # 
-      # dapply(md_id_area2, wbpip:::md_compute_dist_stats(  
-      #   welfare = "welfare_ppp",
-      #   weight = "weight"))
-      
-    # Steps:
-    # 1. make output a data.table
-    test <- wbpip:::md_compute_dist_stats(  
-      welfare = dt$welfare_ppp,
-      weight = dt$weight)
-    test1 <- data.table::transpose(unlist2d(test, DT= TRUE), make.names = ".id", keep.names = "id")
-    test2 <- collapse::pivot(setnafill(test1, "locf", cols = 2:6),
-                             ids = 2:6, names = "id", how = "w", values = "quantiles", na.rm = TRUE) 
-    
-    # 2. Create a function that wraps this values   
-    
+
     setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))
+
+      # # Version using wrapper function for wbpip::md_compute_dist_stats
+      #
+      # md_id_area <- dt |>
+      #   fsubset(distribution_type %in% c("micro", "imputed")) |>
+      #   fselect(-c(distribution_type, welfare))|>
+      #   roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp)|>
+      #   _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+      #                                         weight = weight)),
+      #             by = .(cache_id, imputation_id, reporting_level, area)]|>
+      #   fgroup_by(cache_id, reporting_level, area)|>
+      #   collapg(custom= list(fmean= 5:19))|>
+      #   fungroup()|>
+      #   frename(survey_median_ppp = median)|>
+      #   fmutate(reporting_level = as.character(reporting_level))
     
     # 4. Micro and Imputed Data: National Estimation ----
+      
     md_id_national <- dt |>
-      fselect(cache_id, distribution_type, reporting_level, imputation_id, 
-              area, weight, welfare_ppp) |>
-      fsubset(distribution_type %in% c("micro", "imputed") 
+      fsubset(distribution_type %in% c("micro", "imputed")
               & reporting_level == 'national' & area != "national") |>
+      fselect(-c(distribution_type,welfare))|>
       roworder(cache_id, imputation_id, welfare_ppp) |>
-      fgroup_by(cache_id, imputation_id)|> 
-      fsummarise(res = list(wbpip:::md_compute_dist_stats(  
+      fgroup_by(cache_id, imputation_id)|>
+      fsummarise(res = list(wbpip:::md_compute_dist_stats(
         welfare = welfare_ppp,
         weight = weight)))|>
-      _[, c(.SD, .(  
-        Statistic = names(unlist(res)), 
+      _[, c(.SD, .(
+        Statistic = names(unlist(res)),
         Value = unlist(res))),
         by = .(cache_id, imputation_id)] |>
       fselect(-res)|>
       pivot(ids = 1:3, how="w", values = "Value", names = "Statistic") |>
       fgroup_by(cache_id)|>
-      fsummarise(across(mean:quantiles10, fmean))|> 
+      collapg(custom= list(fmean= 4:18))|>
       fungroup()|>
       frename(survey_median_ppp = median) |>
-      fmutate(reporting_level = as.character("national"), 
+      fmutate(reporting_level = as.character("national"),
               area = as.character("national"))
-    
+
     setrename(md_id_national, gsub("quantiles", "decile", names(md_id_national)))
     
-    if(anyv(dt$distribution_type %in% c("group", "aggregate"))){
+    # # Version using wrapper function for wbpip::md_compute_dist_stats
+    #
+    # md_id_national <- dt |>
+    #     fsubset(distribution_type %in% c("micro", "imputed")
+    #           & reporting_level == 'national' & area != "national") |>
+    #     fselect(-c(distribution_type, welfare))|>
+    #     roworder(cache_id, imputation_id, welfare_ppp)|>
+    #   _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp, weight = weight)),
+    #                                  by = .(cache_id, imputation_id)]|>
+    #   fgroup_by(cache_id)|>
+    #   collapg(custom= list(fmean= 3:17))|>
+    #   fungroup()|>
+    #   frename(survey_median_ppp = median)|>
+    #   fmutate(reporting_level = as.character("national"),
+    #             area = as.character("national"))
+     
+    if(any(dt$distribution_type %in% c("group", "aggregate"))){
       
       # 5. Group and Aggregate Data: Level and Area Estimation -----
       gd_ag_area <- dt |>
-        fselect(cache_id, distribution_type, reporting_level, imputation_id, 
-                area, welfare, weight) |>
         fsubset(distribution_type %in% c("group", "aggregate")) |>
+        fselect(-c(distribution_type, welfare_ppp))|>
         collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp),
                        on=c("cache_id", "reporting_level", "area"), 
                        validate = "m:1",
@@ -596,8 +623,8 @@ db_dist_stats_sac <- function(dt, mean_table){
       
       # 6. Aggregate Data: National estimation (synth needed) ----
       ag_national <- dt |>
-        fselect(cache_id, distribution_type, reporting_level, area, welfare, welfare_ppp, weight) |>
         fsubset(distribution_type %in% c("aggregate")) |>
+        fselect(-c(distribution_type,welfare_ppp))|>
         collapse::join(mean_table |> fselect(cache_id, reporting_level, area, survey_mean_ppp, 
                                              reporting_pop), 
                        # using reporting_pop as it is the same as the one in the pop_table
@@ -632,12 +659,15 @@ db_dist_stats_sac <- function(dt, mean_table){
       setrename(ag_national, gsub("quantiles", "decile", names(ag_national)))
       
       # 7. Rbindlist and return ----
-      final <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national, 
+      final <- rbindlist(list(md_id_area, md_id_national, 
                               gd_ag_area, ag_national), use.names = TRUE)
+      
+      return(final)
+      
     }
     
     # 7. Rbindlist and return ----
-    final <- rbindlist(list(md_id_area |> fselect(-weight), md_id_national), 
+    final <- rbindlist(list(md_id_area, md_id_national), 
                        use.names = TRUE)
   
   return(final)

@@ -2,10 +2,10 @@
 bench <- microbenchmark::microbenchmark(
   times = 100,
   SAC = {
-    new_value = Means_pipeline_sac(cache_inventory, cache, dl_aux)
+    new_value = Means_pipeline_sac(cache_inventory, cache_tb, dl_aux)
     },
   Nested = {
-    old_value = Means_pipeline_tar(cache_inventory, cache, dl_aux)
+    old_value = Means_pipeline_tar(cache_inventory, cache_ls, dl_aux)
     }
 )
 if (requireNamespace("highcharter")) {
@@ -33,7 +33,7 @@ bench_dist <- microbenchmark::microbenchmark(
                                means_out_sac)
   },
   Nested = {
-    old_value = Dist_stats_tar(cache,
+    old_value = Dist_stats_tar(cache_ls,
                                means_out_tar,
                                dl_aux,
                                cache_ids, 

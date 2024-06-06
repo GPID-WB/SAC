@@ -45,7 +45,7 @@ withr::with_dir(new = base_dir,
                   # source("./_packages.R")
                   
                   # Load R files
-                  purrr::walk(fs::dir_ls(path = "./R", 
+                  purrr::walk(fs::dir_ls(path = "./R",
                                          regexp = "\\.R$"), source)
                   
                   # Read pipdm functions
@@ -80,7 +80,7 @@ if (!is.null(config$cache_dir)) {
 
 ### Cache inventory ---------
 
-cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
+cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
 cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
                                        cache_inventory$cache_id %like% "BOL" |
                                        cache_inventory$cache_id %like% "NGA"),]
@@ -89,10 +89,11 @@ cache_ids <- get_cache_id(cache_inventory)
 ### Full Cache ---------
 
 # In list format:
-cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = gls$vintage_dir) 
 
 # In dt format:
-cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
+cache_tb <- rowbind(cache_ls, fill = TRUE)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
@@ -116,10 +117,9 @@ Means_pipeline_sac <- function(cache_inventory,
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Group data means --------
-  
-  gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, 
-                                          gdm = dl_aux$gdm)
-  
+    gd_means_sac <- get_groupdata_means_sac(cache_inventory = cache_inventory, 
+                                            gdm = dl_aux$gdm)  
+
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Means in LCU --------
   

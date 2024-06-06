@@ -33,16 +33,8 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-if (Sys.info()['user'] ==  "wb535623") {
-  
-  #Need to add Povcalnet if in remote computer
-  base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
-  
-} else if (Sys.info()['user'] ==  "wb622077") {
-  
-  #Need to add Povcalnet if in remote computer
-  base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-}
+config <- config::get(config = Sys.info()['user'])
+base_dir <- config$base_dir
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -71,17 +63,10 @@ base_dir |>
 
 ## Change gls outdir:
 
-if (Sys.info()['user'] ==  "wb535623") {
-  
-  #Need to add Povcalnet if in remote computer
-  gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
-  
-} else if (Sys.info()['user'] ==  "wb622077") {
-  
-  #Need to add Povcalnet if in remote computer
-  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-  
+if (!is.null(config$cache_dir)) {
+  gls$CACHE_SVY_DIR_PC <- config$cache_dir
 }
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Load test data   ---------

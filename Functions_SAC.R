@@ -70,7 +70,7 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   
   
   dt_s <- dt |> 
-    fsubset(distribution_type=="imputed" | distribution_type == "micro")
+    fsubset(distribution_type %in% c("imputed", "micro"))
   
   dt_m <- dt_s |> 
     fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
@@ -93,20 +93,21 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   
   # ----- Micro data national -----
   dt_ms <- dt_m |>
-    fsubset(area != "national" & reporting_level == "national") 
+    fsubset(area != "national" & reporting_level == "national") |> 
+    ftransform(area = "national")
   
   dt_nat <- dt_ms |> 
-    fgroup_by(cache_id, reporting_level)|>
+    fgroup_by(cache_id, reporting_level, area)|>
     fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
                weight = fsum(weight))|>
   
     fungroup() |> 
-    fselect(-c(cache_id, reporting_level))
+    fselect(-c(cache_id, reporting_level, area))
   
   
   dt_meta_vars <- dt_ms |> 
     get_vars(metadata_vars) |> 
-    funique(cols = c("cache_id", "reporting_level")) 
+    funique(cols = c("cache_id", "reporting_level", "area")) 
   
   add_vars(dt_nat) <- dt_meta_vars
   
@@ -119,7 +120,7 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
   
   #  ------ Group data -----
   
-  if(any(dt$distribution_type %in% c("group", "aggregate"))){
+  if (any(dt$distribution_type %in% c("group", "aggregate"))) {
     
     
     keep_vars <- c("survey_id", "country_code", "surveyid_year", 
@@ -128,19 +129,19 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
                    "ppp_data_level", "gdp_data_level", 
                    "pce_data_level", "pop_data_level")
     
+    
     dt_g <- dt |>
-      fsubset(distribution_type == "group" | distribution_type == "aggregate") |> 
+      fsubset(distribution_type %in% c("group", "aggregate")) |>
+      fselect(-c(welfare, weight)) |> 
+      funique() |> 
       joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
-                 by = c(
-                   "cache_id", "pop_data_level"
-                 ),
+                 by             = c("cache_id", "pop_data_level"),
                  y_vars_to_keep = "survey_mean_lcu",
-                 match_type = "m:1", keep = "left", 
-                 reportvar = FALSE, sort = FALSE)|>
-      fgroup_by(cache_id, reporting_level, pop_data_level)|>
-      fsummarize(across(c(keep_vars[!(keep_vars %in% "pop_data_level")], "area",  
-                          "survey_mean_lcu"), funique),
-                 weight = fsum(weight))
+                 match_type     = "1:1", 
+                 keep           = "left", 
+                 reportvar      = FALSE, 
+                 sort           = FALSE) 
+    # NOTE_A: I don't understand why we are getting the totals of weight in group data.
     
     dt_c <- rowbind(dt_c, dt_g, fill = TRUE) # Note: We can eliminate dt_g if needed.
     
@@ -148,22 +149,21 @@ db_compute_survey_mean_sac <- function(cache, gd_mean = NULL) {
 
   # ----- Finalize table -----
   
-  dt_c <- dt_c |> 
-    # ftransform(area = factor(as.character(area), # In case levels are different 
-    #                          levels = union(levels(area), #between area and reporting_level
-    #                                         levels(reporting_level))),
-    #            reporting_level = factor(as.character(reporting_level),
-    #                                     levels = union(levels(area),
-    #                                                    levels(reporting_level))))|>
-    roworder(survey_id, country_code, surveyid_year, survey_acronym,
-             survey_year, welfare_type) |> # Order rows
-    colorder(survey_id, country_code, surveyid_year, survey_acronym,
-             survey_year, welfare_type) # Order columns
+    
+  sort_vars <- c("survey_id",
+                 "country_code",
+                 "surveyid_year",
+                 "survey_acronym",
+                 "survey_year",
+                 "welfare_type")
+    
+   setorderv(dt_c, sort_vars) # Order rows
+   setcolorder(dt_c, sort_vars) # Order columns
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  return(dt_c)
+ dt_c
   
 }
 
@@ -181,14 +181,14 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   # ---- Merge with PFW ----
   
   # Select columns
-  pfw_table <-
-    pfw_table[, c(
+  pfw_table <- pfw_table |> 
+    fselect(c(
       "wb_region_code", "pcn_region_code",
       "country_code", "survey_coverage",
       "surveyid_year", "survey_acronym",
       "reporting_year", "survey_comparability",
       "display_cp", "survey_time"
-    )]
+    ))
   
   # Merge LCU table with PFW (left join)
   dt <- joyn::joyn(dt, pfw_table,

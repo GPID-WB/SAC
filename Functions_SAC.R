@@ -311,14 +311,9 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   #--------- Merge with CPI ---------
   
   # Select CPI columns
-  cpi_table <-
-    cpi_table[, .SD,
-              .SDcols =
-                c(
-                  "country_code", "survey_year", "survey_acronym",
-                  "cpi_data_level", "cpi"
-                )
-    ]
+  cpi_table <- cpi_table |> 
+    fselect(c("country_code", "survey_year", "survey_acronym",
+      "cpi_data_level", "cpi"))
   
   # Merge survey table with CPI (left join)
   dt <- joyn::joyn(lcu_table, cpi_table,
@@ -533,9 +528,7 @@ db_dist_stats_sac <- function(dt, mean_table){
   
   # 1. Fill area with national when empty and select variables ----
 
-  dt <- ftransform(dt, area = ifelse(as.character(area) == "", # if empty
-                                     "national", # it gets national
-                                     as.character(area)))|> # else it keeps area
+  dt <- dt |> 
     fselect(cache_id, distribution_type, reporting_level, imputation_id,
             area, weight, welfare_ppp, welfare)
     
@@ -544,8 +537,9 @@ db_dist_stats_sac <- function(dt, mean_table){
     md_id_area <- dt |>
       fsubset(distribution_type %in% c("micro", "imputed")) |>
       fselect(-c(distribution_type,welfare))|>
+      # NOTE_A: Is this sorting necessary here? 
       roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
-      fgroup_by(cache_id, imputation_id, reporting_level, area)|>
+      fgroup_by(cache_id, imputation_id, reporting_level, area) |>
       fsummarise(res = list(wbpip:::md_compute_dist_stats(
         welfare = welfare_ppp,
         weight = weight)))|>
@@ -556,9 +550,10 @@ db_dist_stats_sac <- function(dt, mean_table){
       fselect(-res)|>
       pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
       fgroup_by(cache_id, reporting_level, area)|>
+      # NOTE_A: In this the mean of dist measures? 
       collapg(custom= list(fmean= 6:20))|> # If we don't use windows we could use `parallel = TRUE`
-      fungroup()|>
-      frename(survey_median_ppp = median)|>
+      fungroup() |>
+      frename(survey_median_ppp = median) |>
       fmutate(reporting_level = as.character(reporting_level))
 
     setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))

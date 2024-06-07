@@ -524,13 +524,16 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 ## Objective: Calculate distributional statistics at the national and area level
 ## Note: This function is missing the warnings from the old pipeline
 
-db_dist_stats_sac <- function(dt, mean_table){
+db_dist_stats_sac <- function(cache, mean_table){
   
   # 1. Fill area with national when empty and select variables ----
 
-  dt <- dt |> 
+  dt <- cache |> 
     fselect(cache_id, distribution_type, reporting_level, imputation_id,
-            area, weight, welfare_ppp, welfare)
+            area, weight, welfare_ppp, welfare) |> 
+    ftransform(area = as.character(area)) |> 
+    ftransform(area = fifelse(area == "", "national", area)) 
+    
     
     # 2. Micro and Imputed Data: Level & Area Estimation  ----
   
@@ -540,6 +543,7 @@ db_dist_stats_sac <- function(dt, mean_table){
       # NOTE_A: Is this sorting necessary here? 
       roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
       fgroup_by(cache_id, imputation_id, reporting_level, area) |>
+      # NOTE_A: I think the most efficient way is to call each wbpip function individually
       fsummarise(res = list(wbpip:::md_compute_dist_stats(
         welfare = welfare_ppp,
         weight = weight)))|>

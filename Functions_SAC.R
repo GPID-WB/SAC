@@ -87,25 +87,21 @@ db_compute_survey_mean_sac <- function(cache,
   
   # ------ Micro data urban/rural -----
   
-  #n_var <- which(colnames(dt)=="welfare")
-  
-  dt_m <- dt |>
+  dt_m <- cache |>
     fsubset(distribution_type %in% c("imputed", "micro"))|>
     fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
     # fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
     #            weight = fsum(weight))|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = 1)), w = weight)|>
-    fgroup_by(cache_id, reporting_level, area)
-  
-  #n_var <- which(colnames(dt_m)=="survey_mean_lcu")
-  
+    collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)
+    
   dt_m <- dt_m |>
+    fgroup_by(cache_id, reporting_level, area)|>
     # fsummarize(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
     #            weight = fsum(weight))|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = 6)), w = weight)|>
+    collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
     fungroup()
   
-  dt_meta_vars <- dt |>
+  dt_meta_vars <- cache |>
     fsubset(distribution_type %in% c("imputed", "micro"))|>
     get_vars(metadata_vars) |> 
     funique(cols = c("cache_id", "reporting_level", "area")) 
@@ -115,14 +111,12 @@ db_compute_survey_mean_sac <- function(cache,
   
   # ----- Micro data national -----
   
-  #n_var <- which(colnames(dt_m)=="survey_mean_lcu")
-  
   dt_nat <- dt_m |>
     fsubset(area != "national" & reporting_level == "national")|>
     fgroup_by(cache_id, reporting_level)|>
     # fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
     #            weight = fsum(weight))|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = 5)), w = weight)|>
+    collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
     fungroup()|>
     fmutate(area = "national")
   
@@ -140,13 +134,14 @@ db_compute_survey_mean_sac <- function(cache,
   
   #  ------ Group data -----
   
-  if(any(dt$distribution_type %in% c("group", "aggregate"))){
+  if(any(cache$distribution_type %in% c("group", "aggregate"))){
     
-    dt_g <- dt |>
+    dt_g <- cache |>
       fsubset(distribution_type %in% c("group", "aggregate"))|>
       fselect(-c(welfare, imputation_id)) |> 
       fgroup_by(metadata_vars)|>
-      fsummarize(weight = fsum(weight))|> # Add weight to match weight var from urban/rural 
+      #fsummarize(weight = fsum(weight))|> # Add weight to match weight var from urban/rural 
+      collapg(custom = list(fsum = "weight"))|>
       joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                  by = c(
                    "cache_id", "pop_data_level"
@@ -193,18 +188,13 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   
   # ---- Merge with PFW ----
   
-  # Select columns
-  pfw_table <-
-    pfw_table[, c(
-      "wb_region_code", "pcn_region_code",
-      "country_code", "survey_coverage",
-      "surveyid_year", "survey_acronym",
-      "reporting_year", "survey_comparability",
-      "display_cp", "survey_time"
-    )]
-  
-  # Merge LCU table with PFW (left join)
-  dt <- joyn::joyn(dt, pfw_table,
+  # Select columns and merge LCU table with PFW (left join)
+  dt <- joyn::joyn(dt, pfw_table|>
+                     fselect(wb_region_code, pcn_region_code,
+                             country_code, survey_coverage,
+                             surveyid_year, survey_acronym,
+                             reporting_year, survey_comparability,
+                             display_cp, survey_time),
                    by = c(
                      "country_code",
                      "surveyid_year",
@@ -225,9 +215,9 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     )
   }
   
-  dt <- dt[
-    .joyn != "y" 
-  ][, .joyn := NULL]
+  dt <- dt|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
   
   #--------- Merge with POP ---------
   
@@ -255,30 +245,45 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     )
   }
   
-  dt <- dt[
-    .joyn != "y" ][, .joyn := NULL]
-  
-  data.table::setnames(dt, "pop", "reporting_pop")
+  dt <- dt|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)|>
+    setnames("pop", "reporting_pop")
   
   # ---- Survey_pop ----
   
-  dt_svy_pop <- dt[survey_year != floor(survey_year),] |>
-    rowbind(dt[survey_year != floor(survey_year),], idcol = "id")|>
+  dt_svy_pop <- dt|>
+    fsubset(survey_year != floor(survey_year)) |>
+    rowbind(dt|> fsubset(survey_year != floor(survey_year)), idcol = "id")|>
     fmutate(year_rnd = case_when(id == 1 ~ ceiling(survey_year),
                                  id == 2 ~ floor(survey_year),
                                  .default = NA_integer_),
             diff = 1 - abs(survey_year-year_rnd))|>
-    joyn::joyn(pop_table, # Do we need warning in case join == x?
+    joyn::joyn(pop_table, 
                by = c("country_code", 
                       "year_rnd = year",
                       "area = pop_data_level"
                ),
                match_type = "m:1",
                keep = "left"
-    ) |>
+    )
+  
+  if (nrow(dt_svy_pop[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_svy_pop <- dt_svy_pop|>
     fgroup_by(survey_id, country_code, survey_year,
               reporting_level, area)|>
-    fsummarize(survey_pop = fmean(pop, w = diff))|>
+    collapg(custom = list(fmean = "pop"), w = diff)|>
+    frename(survey_pop = pop)|>
     fungroup()
   
   dt <- joyn::joyn(dt, dt_svy_pop,
@@ -292,18 +297,24 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                    keep = "left"
   )
   
-  dt <- dt[
-    .joyn != "y" ][, .joyn := NULL]
+  dt <- dt|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
   
   # ---- Finalize table ----
   
   dt <- dt |>
-    ftransform(survey_pop = fifelse(is.na(survey_pop), 
-                                    reporting_pop, survey_pop))|>
-    roworder(country_code, surveyid_year, survey_acronym)|>
-    colorder(survey_id, cache_id , country_code, surveyid_year, survey_acronym,
-             survey_year, welfare_type, survey_mean_lcu, survey_pop,
-             reporting_pop)
+    ftransform(survey_pop = fifelse(is.na(survey_pop),
+                                    reporting_pop, survey_pop))
+  
+  # dt$survey_pop[is.na(dt$survey_pop)] <- dt$reporting_pop
+  
+  setorderv(dt, c("country_code", "surveyid_year", "survey_acronym"))
+  
+  setcolorder(dt, c("survey_id", "cache_id" , "country_code", 
+              "surveyid_year", "survey_acronym", "survey_year", 
+              "welfare_type", "survey_mean_lcu", "survey_pop",
+              "reporting_pop"))
   
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

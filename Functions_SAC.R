@@ -542,13 +542,12 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
 ## Objective: Calculate distributional statistics at the national and area level
 ## Note: This function is missing the warnings from the old pipeline
 
-db_dist_stats_sac <- function(dt, mean_table){
+db_dist_stats_sac <- function(cache, 
+                              mean_table){
   
   # 1. Fill area with national when empty and select variables ----
 
-  dt <- ftransform(dt, area = ifelse(as.character(area) == "", # if empty
-                                     "national", # it gets national
-                                     as.character(area)))|> # else it keeps area
+  dt <- cache|>
     fselect(cache_id, distribution_type, reporting_level, imputation_id,
             area, weight, welfare_ppp, welfare)
     

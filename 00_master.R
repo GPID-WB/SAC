@@ -171,6 +171,8 @@ Means_pipeline_tar <- function(cache_inventory,
                                cache, 
                                dl_aux){
   
+  cache <- get_cache(cache)
+  
   gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
                                       gdm = dl_aux$gdm)
   
@@ -227,10 +229,12 @@ waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 Dist_stats_sac <- function(cache, 
                            dsm_table){
   
+  cache <- get_cache(cache)
+  
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Calculate Distributional Statistics --------
   
-  db_dist_stats <- db_dist_stats_sac(dt = cache,
+  db_dist_stats <- db_dist_stats_sac(cache = cache,
                                          mean_table = dsm_table)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

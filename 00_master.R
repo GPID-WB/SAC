@@ -14,7 +14,7 @@
 # install.packages(c("conflicted", "dotenv", "targets", "tarchetypes",
 # "bs4Dash", "clustermq", "future", "gt", "pingr", "shinycssloaders",
 # "shinyWidgets", "visNetwork", "fastverse", "tidyfast", "tidyr",
-# "assertthat"))
+# "assertthat", "config"))
 
 # remotes::install_github("PIP-Technical-Team/pipload@dev", dependencies = FALSE)
 # remotes::install_github("PIP-Technical-Team/wbpip", dependencies = FALSE)
@@ -33,16 +33,19 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-if (Sys.info()['user'] ==  "wb535623") {
-  
-  #Need to add Povcalnet if in remote computer
-  base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
-  
-} else if (Sys.info()['user'] ==  "wb622077") {
-  
-  #Need to add Povcalnet if in remote computer
-  base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-}
+# if (Sys.info()['user'] ==  "wb535623") {
+#   
+#   #Need to add Povcalnet if in remote computer
+#   base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
+#   
+# } else if (Sys.info()['user'] ==  "wb622077") {
+#   
+#   #Need to add Povcalnet if in remote computer
+#   base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
+# }
+
+config <- config::get(config = Sys.info()['user'])
+base_dir <- config$base_dir
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Packages and Data  ---------
@@ -71,16 +74,20 @@ base_dir |>
 
 ## Change gls outdir:
 
-if (Sys.info()['user'] ==  "wb535623") {
-  
-  #Need to add Povcalnet if in remote computer
-  gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
-  
-} else if (Sys.info()['user'] ==  "wb622077") {
-  
-  #Need to add Povcalnet if in remote computer
-  gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-  
+# if (Sys.info()['user'] ==  "wb535623") {
+#   
+#   #Need to add Povcalnet if in remote computer
+#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
+#   
+# } else if (Sys.info()['user'] ==  "wb622077") {
+#   
+#   #Need to add Povcalnet if in remote computer
+#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
+#   
+# }
+
+if (!is.null(config$cache_dir)) {
+  gls$CACHE_SVY_DIR_PC <- config$cache_dir
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,7 +102,7 @@ if (Sys.info()['user'] ==  "wb535623") {
 
 ### Cache inventory ---------
 
-cache_inventory <- pipload::pip_load_cache_inventory(version = '20240326_2017_01_02_PROD')
+cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
 cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
                                        cache_inventory$cache_id %like% "BOL" |
                                        cache_inventory$cache_id %like% "NGA"),]
@@ -104,10 +111,10 @@ cache_ids <- get_cache_id(cache_inventory)
 ### Full Cache ---------
 
 # In list format:
-cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = '20240326_2017_01_02_PROD') 
+cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = gls$vintage_dir) 
 
 # In dt format:
-cache_tb <- pipload::pip_load_cache(c("BOL","CHN","NGA"), version = '20240326_2017_01_02_PROD') 
+cache_tb <- rowbind(cache_ls, fill = TRUE) 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------

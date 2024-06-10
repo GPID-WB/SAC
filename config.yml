@@ -1,0 +1,30 @@
+default:
+  s_path: "E:/Povcalnet" 
+  l_path: "E:"
+
+wb535623:
+  my_pipe_path: "01.personal/wb535623/PIP/pip_ingestion_pipeline"
+  my_cache_path: "01.personal/wb535623/PIP/Cache"
+  base_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_pipe_path) 
+                    else fs::path(l_path, my_pipe_path)
+  cache_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_cache_path) 
+                    else fs::path(l_path, my_cache_path)
+
+wb622077:
+  my_pipe_path: "01.personal/wb622077/pip_ingestion_pipeline"
+  my_cache_path: "01.personal/wb622077/cache"
+  base_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_pipe_path) 
+                    else fs::path(l_path, my_pipe_path)
+  cache_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_cache_path) 
+                    else fs::path(l_path, my_cache_path)
+
+
+wb384996:
+  my_pipe_path: "01.personal/wb384996/PIP/pip_ingestion_pipeline"
+  base_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_pipe_path) 
+                    else fs::path(l_path, my_pipe_path)

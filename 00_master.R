@@ -136,6 +136,9 @@ Means_pipeline_sac <- function(cache_inventory,
                                cache, 
                                dl_aux){
   
+  
+  cache <- get_cache(cache)
+  
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Group data means --------
   
@@ -170,8 +173,6 @@ Means_pipeline_sac <- function(cache_inventory,
 Means_pipeline_tar <- function(cache_inventory, 
                                cache, 
                                dl_aux){
-  
-  cache <- get_cache(cache)
   
   gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
                                       gdm = dl_aux$gdm)

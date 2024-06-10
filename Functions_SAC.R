@@ -143,10 +143,10 @@ db_compute_survey_mean_sac <- function(cache,
   if(any(dt$distribution_type %in% c("group", "aggregate"))){
     
     dt_g <- dt |>
-      fsubset(distribution_type == "group" | distribution_type == "aggregate")|>
+      fsubset(distribution_type %in% c("group", "aggregate"))|>
       fselect(-c(welfare, imputation_id)) |> 
       fgroup_by(metadata_vars)|>
-      fsummarize(weight = fsum(weight))|>
+      fsummarize(weight = fsum(weight))|> # Add weight to match weight var from urban/rural 
       joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                  by = c(
                    "cache_id", "pop_data_level"

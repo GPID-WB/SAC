@@ -16,16 +16,18 @@ get_groupdata_means_sac <- function(cache_inventory = cache_inventory, gdm = dl_
   # computations   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
-  dt. <- joyn::joyn(x          = cache_inventory,
+  gd_means <- joyn::joyn(x          = cache_inventory,
                     y          = gdm,
                     by         = c("survey_id", "welfare_type"),
                     match_type = "1:m",
                     y_vars_to_keep = c("survey_mean_lcu", "pop_data_level"),
                     keep       = "left")
   
-  data.table::setorder(dt., cache_id, pop_data_level)
-  gd_means        <- dt.[,.(cache_id, pop_data_level, survey_mean_lcu)]
-  gd_means        <- gd_means[,survey_mean_lcu:= survey_mean_lcu*(12/365)]
+  
+  gd_means <- gd_means |>
+    setorderv(c("cache_id", "pop_data_level"))|>
+    fselect(cache_id, pop_data_level, survey_mean_lcu)|>
+    fmutate(survey_mean_lcu = survey_mean_lcu*(12/365))
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------

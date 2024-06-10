@@ -334,18 +334,13 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   #--------- Merge with CPI ---------
   
-  # Select CPI columns
-  cpi_table <-
-    cpi_table[, .SD,
-              .SDcols =
-                c(
-                  "country_code", "survey_year", "survey_acronym",
-                  "cpi_data_level", "cpi"
-                )
-    ]
-  
   # Merge survey table with CPI (left join)
-  dt <- joyn::joyn(lcu_table, cpi_table,
+  dt <- joyn::joyn(lcu_table, cpi_table|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
                    by = c(
                      "country_code", "survey_year",
                      "survey_acronym", "cpi_data_level"
@@ -364,29 +359,23 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
     )
   }
   
-  dt <- dt[
-    .joyn != "y" 
-  ][, .joyn := NULL]
+  dt <- dt|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
   
   #--------- Merge with PPP ---------
   
-  # Select default PPP values
-  ppp_table <- ppp_table[ppp_default == TRUE]
-  
-  # Select PPP columns
-  ppp_table <-
-    ppp_table[, .SD,
-              .SDcols =
-                c("country_code", "ppp_data_level", "ppp")
-    ]
-  
   # Merge survey table with PPP (left join)
-  jn <- joyn::joyn(dt, ppp_table,
+  dt <- joyn::joyn(dt, ppp_table|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
                    by = c("country_code", "ppp_data_level"),
                    match_type = "m:1"
   )
   
-  if (nrow(jn[.joyn == "x"]) > 0) {
+  if (nrow(dt[.joyn == "x"]) > 0) {
     msg <- "We should not have NOT-matching observations from survey-mean tables"
     hint <- "Make sure PPP table is up to date"
     rlang::abort(c(
@@ -397,14 +386,13 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
     )
   }
   
-  dt <- jn[
-    .joyn != "y" # Countries in PPP table for which we don't have data
-  ][, .joyn := NULL]
+  dt <- dt |>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
   
   #--------- Deflate welfare mean ---------
   
   dt <- fmutate(dt, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
-  
   
   #--------- Add comparable spell --------- ## 
   
@@ -423,58 +411,65 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_line_up column
   
-  dt_lu <- dt[area=="national" | reporting_level == area]
+  # dt_lu <- dt[area=="national" | reporting_level == area]
+  # 
+  # dt_lu <- create_line_up_check(dt_lu)
   
-  dt_lu <- create_line_up_check(dt_lu)
-  
-  dt <- joyn::joyn(dt, dt_lu,
+  dt <- dt |>
+    joyn::joyn(create_line_up_check(dt[area=="national" | reporting_level == area]),
                    by = c("cache_id", "reporting_level", "area"),
                    match_type = "m:1",
-                   y_vars_to_keep = "is_used_for_line_up"
-  )
+                   y_vars_to_keep = "is_used_for_line_up")
+    
   
-  dt <- dt[is.na(is_used_for_line_up),
-           is_used_for_line_up := FALSE]
+  dt$is_used_for_line_up[is.na(dt$is_used_for_line_up)] <- FALSE
   
-  dt <- dt[
-    .joyn != "y" 
-  ][, .joyn := NULL]
+  dt <- dt|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
   
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]
-  dt[, is_used_for_aggregation := ifelse((dt$reporting_level %in% 
-                                            c("urban", "rural") & 
-                                            dt$n_rl == 2), TRUE, FALSE)]
+  
+  dt$is_used_for_aggregation <- (dt$reporting_level %in% 
+                                   c("urban", "rural") & 
+                                   dt$n_rl == 2)
+    
+  # dt[, is_used_for_aggregation2 := ifelse((dt$reporting_level %in% 
+  #                                           c("urban", "rural") & 
+  #                                           dt$n_rl == 2), TRUE, FALSE)]
+  
   dt$n_rl <- NULL
   
   # Select and order columns
-  dt <- dt[, .SD,
-           .SDcols =
-             c(
-               "survey_id", "cache_id", "wb_region_code", "pcn_region_code",
-               "country_code", "survey_acronym", "survey_coverage",
-               "survey_comparability", "comparable_spell",
-               "surveyid_year", "reporting_year",
-               "survey_year", "survey_time", "welfare_type",
-               "survey_mean_lcu", "survey_mean_ppp", #' survey_pop',
-               "reporting_pop", "ppp", "cpi", "pop_data_level",
-               "gdp_data_level", "pce_data_level",
-               "cpi_data_level", "ppp_data_level", "reporting_level",
-               "area",
-               "distribution_type", "gd_type",
-               "is_interpolated", "is_used_for_line_up",
-               "is_used_for_aggregation", "display_cp"
-             )
-  ]
+  
+  dt <- dt |>
+    fselect(survey_id, cache_id, wb_region_code,
+            pcn_region_code, country_code, survey_acronym,
+            survey_coverage, survey_comparability, comparable_spell,
+            surveyid_year, reporting_year, survey_year, 
+            survey_time, welfare_type, survey_mean_lcu,
+            survey_mean_ppp, reporting_pop, ppp,
+            cpi, pop_data_level, gdp_data_level,
+            pce_data_level, cpi_data_level, ppp_data_level,
+            reporting_level, area, distribution_type,
+            gd_type, is_interpolated, is_used_for_line_up,
+            is_used_for_aggregation, display_cp)
   
   # Add aggregated mean for surveys split by Urban/Rural 
   
   if(any(dt$is_used_for_aggregation==TRUE)){
     
     # Select rows w/ non-national pop_data_level
-    dt_sub <- dt[is_used_for_aggregation == TRUE]
+    # dt_sub <- dt[is_used_for_aggregation == TRUE]
     
     # Compute aggregated mean (weighted population average)
+    dt_sub <- dt|>
+      fsubset(is_used_for_aggregation == TRUE)
+    # |>
+    #   fgroup_by(survey_id, cache_id)|>
+    #   collapg(custom = list(fsum = c(reporting_pop = "reporting_pop"),
+    #                         fmean = c()))
     dt_agg <- dt_sub[, ":=" (reporting_pop           = fsum(reporting_pop),
                              survey_mean_lcu = fmean(x = survey_mean_lcu,
                                                      w = reporting_pop),

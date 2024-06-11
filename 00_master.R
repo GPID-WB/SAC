@@ -214,6 +214,9 @@ compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- 
 data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
 data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
 
+# Order columns
+compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
+
 # Comparison
 all.equal(means_out_tar,compare_sac)
 

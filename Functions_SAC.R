@@ -20,7 +20,7 @@ get_cache <- function(cache) {
             pop_data_level, reporting_level, area)|>
     ftransform(area = as.character(area))
   
-  dt$area[dt$area==""] <- "national" # Faster than ifelse
+  dt[dt$area=="","area"] <- "national" # Faster than ifelse or dt$area
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
@@ -302,12 +302,10 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     fselect(-.joyn)
   
   # ---- Finalize table ----
-  
+
   dt <- dt |>
     ftransform(survey_pop = fifelse(is.na(survey_pop),
                                     reporting_pop, survey_pop))
-  
-  # dt$survey_pop[is.na(dt$survey_pop)] <- dt$reporting_pop
   
   setorderv(dt, c("country_code", "surveyid_year", "survey_acronym"))
   
@@ -422,7 +420,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                    y_vars_to_keep = "is_used_for_line_up")
     
   
-  dt$is_used_for_line_up[is.na(dt$is_used_for_line_up)] <- FALSE
+  dt[is.na(dt$is_used_for_line_up), "is_used_for_line_up"] <- FALSE
   
   dt <- dt|>
     fsubset(.joyn != "y")|>
@@ -443,18 +441,20 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Select and order columns
   
+  data_vars <- c("survey_id", "cache_id", "wb_region_code",
+                 "pcn_region_code", "country_code", "survey_acronym",
+                 "survey_coverage", "survey_comparability", "comparable_spell",
+                 "surveyid_year", "reporting_year", "survey_year", 
+                 "survey_time", "welfare_type", "survey_mean_lcu",
+                 "survey_mean_ppp", "reporting_pop", "ppp",
+                 "cpi", "pop_data_level", "gdp_data_level",
+                 "pce_data_level", "cpi_data_level", "ppp_data_level", 
+                 "reporting_level", "area", "distribution_type",
+                 "gd_type", "is_interpolated", "is_used_for_line_up",
+                 "is_used_for_aggregation", "display_cp")
+  
   dt <- dt |>
-    fselect(survey_id, cache_id, wb_region_code,
-            pcn_region_code, country_code, survey_acronym,
-            survey_coverage, survey_comparability, comparable_spell,
-            surveyid_year, reporting_year, survey_year, 
-            survey_time, welfare_type, survey_mean_lcu,
-            survey_mean_ppp, reporting_pop, ppp,
-            cpi, pop_data_level, gdp_data_level,
-            pce_data_level, cpi_data_level, ppp_data_level,
-            reporting_level, area, distribution_type,
-            gd_type, is_interpolated, is_used_for_line_up,
-            is_used_for_aggregation, display_cp)
+    fselect(data_vars)
   
   # Add aggregated mean for surveys split by Urban/Rural 
   
@@ -464,47 +464,71 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
     # dt_sub <- dt[is_used_for_aggregation == TRUE]
     
     # Compute aggregated mean (weighted population average)
-    dt_sub <- dt|>
+    dt_sub <- dt |>
       fsubset(is_used_for_aggregation == TRUE)
-    # |>
-    #   fgroup_by(survey_id, cache_id)|>
-    #   collapg(custom = list(fsum = c(reporting_pop = "reporting_pop"),
-    #                         fmean = c()))
-    dt_agg <- dt_sub[, ":=" (reporting_pop           = fsum(reporting_pop),
-                             survey_mean_lcu = fmean(x = survey_mean_lcu,
-                                                     w = reporting_pop),
-                             survey_mean_ppp = fmean(x = survey_mean_ppp,
-                                                     w = reporting_pop),
-                             ppp                     = NA,  
-                             cpi                     = NA,
-                             area                    = "national",
-                             pop_data_level          = "national", 
-                             gdp_data_level          = "national",
-                             pce_data_level          = "national",
-                             cpi_data_level          = "national",
-                             ppp_data_level          = "national",
-                             reporting_level         = "national",
-                             is_interpolated         = FALSE,
-                             is_used_for_line_up     = FALSE,
-                             is_used_for_aggregation = FALSE),
-                     by = .(survey_id, cache_id) ]
     
-    
-    dt_agg <- dt_agg |>
-      fgroup_by(survey_id, cache_id)|>
-      fsummarise(across(names(dt)[!names(dt) %in% c("survey_id", "cache_id")], funique))|>
+    dt_agg <- dt_sub |>
+      fgroup_by(survey_id, cache_id) |>
+      collapg(custom = list(fmean = "survey_mean_lcu",
+                            fmean = "survey_mean_ppp"),
+              w = reporting_pop)|>
+      fmutate(ppp                     = NA,  
+              cpi                     = NA,
+              area                    = "national",
+              pop_data_level          = "national", 
+              gdp_data_level          = "national",
+              pce_data_level          = "national",
+              cpi_data_level          = "national",
+              ppp_data_level          = "national",
+              reporting_level         = "national",
+              is_interpolated         = FALSE,
+              is_used_for_line_up     = FALSE,
+              is_used_for_aggregation = FALSE)|>
       fungroup()
     
-    dt <- rbind(dt_agg, dt)
+    # dt_agg <- dt_sub[, ":=" (reporting_pop           = fsum(reporting_pop),
+    #                          survey_mean_lcu = fmean(x = survey_mean_lcu,
+    #                                                  w = reporting_pop),
+    #                          survey_mean_ppp = fmean(x = survey_mean_ppp,
+    #                                                  w = reporting_pop),
+    #                          ppp                     = NA,  
+    #                          cpi                     = NA,
+    #                          area                    = "national",
+    #                          pop_data_level          = "national", 
+    #                          gdp_data_level          = "national",
+    #                          pce_data_level          = "national",
+    #                          cpi_data_level          = "national",
+    #                          ppp_data_level          = "national",
+    #                          reporting_level         = "national",
+    #                          is_interpolated         = FALSE,
+    #                          is_used_for_line_up     = FALSE,
+    #                          is_used_for_aggregation = FALSE),
+    #                  by = .(survey_id, cache_id) ]
+    # 
+    
+    dt_meta_vars <- dt_sub |>
+      get_vars(c(names(dt_sub)[!names(dt_sub) %in% names(dt_agg)],"survey_id", "cache_id"))|>
+      funique(cols = c("survey_id", "cache_id"))
+    
+      # fsummarise(across(names(dt)[!names(dt) %in% c("survey_id", "cache_id")], funique))|>
+      # fungroup()
+    
+    add_vars(dt_agg) <- dt_meta_vars|>
+      fselect(-c(survey_id, cache_id))
+    
+    dt <- collapse::rowbind(dt_agg, dt)
   }
   
   # Sort rows
-  data.table::setorder(dt, survey_id, cache_id)
+  setorderv(dt, c("survey_id", "cache_id"))
   
   # change factors to characters
-  nn <- names(dt[, .SD, .SDcols = is.factor])
-  dt[, (nn) := lapply(.SD, as.character),
-     .SDcols = nn]
+  dt <- dt |>
+    fcomputev(is.factor, as.character, keep = names(dt))
+    
+  # nn <- names(dt[, .SD, .SDcols = is.factor])
+  # dt[, (nn) := lapply(.SD, as.character),
+  #    .SDcols = nn]
   
   return(dt)
 }

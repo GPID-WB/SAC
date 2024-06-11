@@ -640,7 +640,7 @@ db_dist_stats_sac <- function(cache,
       fmutate(reporting_level = as.character("national"),
                 area = as.character("national"))
      
-    if(any(dt$distribution_type %in% c("group", "aggregate"))){
+    if(any(cache$distribution_type %in% c("group", "aggregate"))){
       
       # Select variables and subset
       dt <- cache |>

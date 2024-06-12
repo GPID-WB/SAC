@@ -548,9 +548,9 @@ source("wrp_wbpip.R")
 db_dist_stats_sac <- function(cache, 
                               mean_table){
   
-  # 1. Fill area with national when empty and select variables ----
+  # 1. Select variables and subset for Micro data----
 
-  dt <- cache |>
+  dt_m <- cache |>
     fselect(cache_id, distribution_type, reporting_level, imputation_id,
             area, weight, welfare_ppp) |>
     fsubset(distribution_type %in% c("micro", "imputed"))
@@ -581,7 +581,7 @@ db_dist_stats_sac <- function(cache,
 
       # Version using wrapper function for wbpip::md_compute_dist_stats
 
-    md_id_area <- dt |>
+    md_id_area <- dt_m |>
       fselect(-c(distribution_type))|>
       roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp)|>
       _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
@@ -624,7 +624,7 @@ db_dist_stats_sac <- function(cache,
     
     # Version using wrapper function for wbpip::md_compute_dist_stats
 
-    md_id_national <- dt |>
+    md_id_national <- dt_m |>
         fsubset(reporting_level == 'national' & area != "national") |>
         fselect(-c(distribution_type))|>
         roworder(cache_id, imputation_id, welfare_ppp)|>
@@ -642,14 +642,11 @@ db_dist_stats_sac <- function(cache,
      
     if(any(cache$distribution_type %in% c("group", "aggregate"))){
       
-      # Select variables and subset
-      dt <- cache |>
+      # Select variables, subset and join mean table
+      dt_jn <- cache |>
         fselect(cache_id, distribution_type, reporting_level, imputation_id,
                 area, weight, welfare)|>
-        fsubset(distribution_type %in% c("group", "aggregate"))
-      
-      # Join mean table
-      dt_jn <- dt|>
+        fsubset(distribution_type %in% c("group", "aggregate"))|>
         collapse::join(mean_table |> 
                          fselect(cache_id, reporting_level, area, 
                                  survey_mean_ppp, reporting_pop),
@@ -666,34 +663,35 @@ db_dist_stats_sac <- function(cache,
       
       
       # 5. Group and Aggregate Data: Level and Area Estimation -----
+      # gd_ag_area <- dt_jn |>
+      #   fselect(-c(distribution_type, reporting_pop)) |>
+      #   roworder(cache_id, reporting_level, area, welfare)|>
+      #   fgroup_by(cache_id, reporting_level, area)|>
+      #   fsummarise(res = list(wbpip:::gd_compute_dist_stats(  
+      #     welfare = welfare,
+      #     population = weight,
+      #     mean = funique(survey_mean_ppp))))|>
+      #   _[, c(.SD, .( # using _ because we are using native pipe 
+      #     Statistic = names(unlist(res)), 
+      #     Value = unlist(res))),
+      #     by = .(cache_id, reporting_level, area)] |>
+      #   fselect(-res)|>
+      #   pivot(ids = 1:3, how="w", values = "Value", names = "Statistic")|>
+      #   frename(survey_median_ppp = median)|>
+      #   fmutate(reporting_level = as.character(reporting_level))
+      
       gd_ag_area <- dt_jn |>
         fselect(-c(distribution_type, reporting_pop)) |>
         roworder(cache_id, reporting_level, area, welfare)|>
         fgroup_by(cache_id, reporting_level, area)|>
-        fsummarise(res = list(wbpip:::gd_compute_dist_stats(  
-          welfare = welfare,
-          population = weight,
-          mean = funique(survey_mean_ppp))))|>
-        _[, c(.SD, .( # using _ because we are using native pipe 
-          Statistic = names(unlist(res)), 
-          Value = unlist(res))),
-          by = .(cache_id, reporting_level, area)] |>
-        fselect(-res)|>
-        pivot(ids = 1:3, how="w", values = "Value", names = "Statistic")|>
+        _[, as.list(wrp_gd_dist_stats(welfare = welfare,
+                                      population = weight,
+                                      mean = funique(survey_mean_ppp))),
+          by = .(cache_id, reporting_level, area)]|>
         frename(survey_median_ppp = median)|>
         fmutate(reporting_level = as.character(reporting_level))
-      
+
       setrename(gd_ag_area, gsub("deciles", "decile", names(gd_ag_area)))
-      
-      # gd_ag_area2 <- dt_jn |>
-      #   fselect(-c(distribution_type, reporting_pop)) |>
-      #   roworder(cache_id, reporting_level, area, welfare)|>
-      #   fgroup_by(cache_id, reporting_level, area)
-      # |>
-      #   _[, as.list(wbpip:::gd_compute_dist_stats(welfare = welfare,
-      #                                             population = weight,
-      #                                             mean = funique(survey_mean_ppp))),
-      #     by = .(cache_id, imputation_id, reporting_level, area)]
       
       # 6. Aggregate Data: National estimation (synth needed) ----
       # ag_national <- dt_jn |>
@@ -739,6 +737,7 @@ db_dist_stats_sac <- function(cache,
         weight = funique(reporting_pop)/100000) 
       
       # Aggregate to national
+      
       ag_national <- ag_syn |> 
         roworder(cache_id, welfare)|>
         _[, as.list(wrp_md_dist_stats(welfare = welfare, weight = weight)),
@@ -753,21 +752,17 @@ db_dist_stats_sac <- function(cache,
         fmutate(reporting_level = as.character("national"),
                 area = as.character("national"))
       
-      # 7. Rbindlist and return ----
-      final <- rbindlist(list(md_id_area, md_id_national,
-                              gd_ag_area, ag_national), use.names = TRUE)
+      # 7. Rowbind and return ----
       
-      # final <- rowbind(md_id_area, md_id_national, gd_ag_area, ag_national)
+      final <- rowbind(md_id_area, md_id_national, gd_ag_area, ag_national)
       
       return(final)
       
     }
     
-    # 7. Rbindlist and return ----
-    final <- rbindlist(list(md_id_area, md_id_national),
-                       use.names = TRUE)
-    
-    # final <- rowbind(md_id_area, md_id_national)
+    # 7. Rowbind and return ----
+
+    final <- rowbind(md_id_area, md_id_national)
   
   return(final)
   

@@ -87,12 +87,12 @@ wrp_gd_dist_stats <- function(welfare,
   # Apply Lorenz quadratic fit ----------------------------------------------
   
   # STEP 1: Prep data to fit functional form
-  prepped_data <- wbpip:::create_functional_form_lq(
+  prepped_data <- wbpip::create_functional_form_lq(
     welfare = welfare, population = population
   )
   
   # STEP 2: Estimate regression coefficients using LQ parameterization
-  reg_results_lq <- wbpip:::regres(prepped_data, is_lq = TRUE)
+  reg_results_lq <- wbpip::regres(prepped_data, is_lq = TRUE)
   A <- reg_results_lq$coef[1]
   B <- reg_results_lq$coef[2]
   C <- reg_results_lq$coef[3]
@@ -122,12 +122,12 @@ wrp_gd_dist_stats <- function(welfare,
   # Apply Lorenz beta fit ---------------------------------------------------
   
   # STEP 1: Prep data to fit functional form
-  prepped_data <- wbpip:::create_functional_form_lb(
+  prepped_data <- wbpip::create_functional_form_lb(
     welfare = welfare, population = population
   )
   
   # STEP 2: Estimate regression coefficients using LB parameterization
-  reg_results_lb <- wbpip:::regres(prepped_data, is_lq = FALSE)
+  reg_results_lb <- wbpip::regres(prepped_data, is_lq = FALSE)
   A <- reg_results_lb$coef[1]
   B <- reg_results_lb$coef[2]
   C <- reg_results_lb$coef[3]
@@ -155,15 +155,21 @@ wrp_gd_dist_stats <- function(welfare,
     lq = results_lq, lb = results_lb
   )
   
+  # Deciles change -------
+  
+  # deciles <- unlist2d(out["deciles"], idcols = FALSE)
+  # names(deciles) <- paste0("decile",1:10)
+  # 
+  # deciles <- unlist(out["deciles"])
+  
   # Return only subset of variables
-  out <- out[c(
+  out <- c(out[c(
     "mean",
     "median",
     "gini",
     "mld",
-    "polarization",
-    "deciles"
-  )]
+    "polarization"
+  )], unlist(out["deciles"]))
   
   return(out)
 }

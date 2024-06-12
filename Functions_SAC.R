@@ -20,7 +20,9 @@ get_cache <- function(cache) {
             pop_data_level, reporting_level, area)|>
     ftransform(area = as.character(area))
   
-  dt[dt$area=="","area"] <- "national" # Faster than ifelse or dt$area
+  #dt[dt$area=="","area"] <- "national" 
+  
+  setv(dt$area,"", "national") # Faster than ifelse or data.table above
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
@@ -87,22 +89,17 @@ db_compute_survey_mean_sac <- function(cache,
   
   # ------ Micro data urban/rural -----
   
-  dt_m <- cache |>
-    fsubset(distribution_type %in% c("imputed", "micro"))|>
+  dt <- cache |>
+    fsubset(distribution_type %in% c("imputed", "micro"))
+  
+  dt_m <- dt |>
     fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
-    # fsummarise(survey_mean_lcu = fmean(welfare, w = weight, na.rm = TRUE),
-    #            weight = fsum(weight))|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)
-    
-  dt_m <- dt_m |>
+    collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
     fgroup_by(cache_id, reporting_level, area)|>
-    # fsummarize(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
-    #            weight = fsum(weight))|>
     collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
     fungroup()
   
-  dt_meta_vars <- cache |>
-    fsubset(distribution_type %in% c("imputed", "micro"))|>
+  dt_meta_vars <- dt |>
     get_vars(metadata_vars) |> 
     funique(cols = c("cache_id", "reporting_level", "area")) 
   
@@ -111,17 +108,16 @@ db_compute_survey_mean_sac <- function(cache,
   
   # ----- Micro data national -----
   
-  dt_nat <- dt_m |>
-    fsubset(area != "national" & reporting_level == "national")|>
+  dt <- dt_m |>
+    fsubset(area != "national" & reporting_level == "national")
+  
+  dt_nat <- dt |>
     fgroup_by(cache_id, reporting_level)|>
-    # fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight, na.rm = TRUE),
-    #            weight = fsum(weight))|>
     collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
     fungroup()|>
     fmutate(area = "national")
   
-  dt_meta_vars <- dt_m |>
-    fsubset(area != "national" & reporting_level == "national")|> 
+  dt_meta_vars <- dt |> 
     get_vars(metadata_vars) |> 
     funique(cols = c("cache_id", "reporting_level")) 
   
@@ -140,7 +136,6 @@ db_compute_survey_mean_sac <- function(cache,
       fsubset(distribution_type %in% c("group", "aggregate"))|>
       fselect(-c(welfare, imputation_id)) |> 
       fgroup_by(metadata_vars)|>
-      #fsummarize(weight = fsum(weight))|> # Add weight to match weight var from urban/rural 
       collapg(custom = list(fsum = "weight"))|>
       joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                  by = c(
@@ -150,7 +145,7 @@ db_compute_survey_mean_sac <- function(cache,
                  match_type = "1:1", keep = "left", 
                  reportvar = FALSE, sort = FALSE)
     
-    dt_c <- collapse::rowbind(dt_c, dt_g) # Note: We can eliminate dt_g if needed.
+    dt_c <- collapse::rowbind(dt_c, dt_g) 
     
   }
 
@@ -409,10 +404,6 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_line_up column
   
-  # dt_lu <- dt[area=="national" | reporting_level == area]
-  # 
-  # dt_lu <- create_line_up_check(dt_lu)
-  
   dt <- dt |>
     joyn::joyn(create_line_up_check(dt[area=="national" | reporting_level == area]),
                    by = c("cache_id", "reporting_level", "area"),
@@ -420,7 +411,9 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                    y_vars_to_keep = "is_used_for_line_up")
     
   
-  dt[is.na(dt$is_used_for_line_up), "is_used_for_line_up"] <- FALSE
+  #dt[is.na(dt$is_used_for_line_up), "is_used_for_line_up"] <- FALSE
+  
+  setv(dt$is_used_for_line_up,is.na(dt$is_used_for_line_up), FALSE)
   
   dt <- dt|>
     fsubset(.joyn != "y")|>
@@ -432,10 +425,6 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   dt$is_used_for_aggregation <- (dt$reporting_level %in% 
                                    c("urban", "rural") & 
                                    dt$n_rl == 2)
-    
-  # dt[, is_used_for_aggregation2 := ifelse((dt$reporting_level %in% 
-  #                                           c("urban", "rural") & 
-  #                                           dt$n_rl == 2), TRUE, FALSE)]
   
   dt$n_rl <- NULL
   
@@ -461,11 +450,11 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   if(any(dt$is_used_for_aggregation==TRUE)){
     
     # Select rows w/ non-national pop_data_level
-    # dt_sub <- dt[is_used_for_aggregation == TRUE]
-    
-    # Compute aggregated mean (weighted population average)
+
     dt_sub <- dt |>
       fsubset(is_used_for_aggregation == TRUE)
+    
+    # Compute aggregated mean (weighted population average)
     
     dt_agg <- dt_sub |>
       fgroup_by(survey_id, cache_id) |>
@@ -486,32 +475,9 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
               is_used_for_aggregation = FALSE)|>
       fungroup()
     
-    # dt_agg <- dt_sub[, ":=" (reporting_pop           = fsum(reporting_pop),
-    #                          survey_mean_lcu = fmean(x = survey_mean_lcu,
-    #                                                  w = reporting_pop),
-    #                          survey_mean_ppp = fmean(x = survey_mean_ppp,
-    #                                                  w = reporting_pop),
-    #                          ppp                     = NA,  
-    #                          cpi                     = NA,
-    #                          area                    = "national",
-    #                          pop_data_level          = "national", 
-    #                          gdp_data_level          = "national",
-    #                          pce_data_level          = "national",
-    #                          cpi_data_level          = "national",
-    #                          ppp_data_level          = "national",
-    #                          reporting_level         = "national",
-    #                          is_interpolated         = FALSE,
-    #                          is_used_for_line_up     = FALSE,
-    #                          is_used_for_aggregation = FALSE),
-    #                  by = .(survey_id, cache_id) ]
-    # 
-    
     dt_meta_vars <- dt_sub |>
       get_vars(c(names(dt_sub)[!names(dt_sub) %in% names(dt_agg)],"survey_id", "cache_id"))|>
       funique(cols = c("survey_id", "cache_id"))
-    
-      # fsummarise(across(names(dt)[!names(dt) %in% c("survey_id", "cache_id")], funique))|>
-      # fungroup()
     
     add_vars(dt_agg) <- dt_meta_vars|>
       fselect(-c(survey_id, cache_id))
@@ -525,11 +491,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   # change factors to characters
   dt <- dt |>
     fcomputev(is.factor, as.character, keep = names(dt))
-    
-  # nn <- names(dt[, .SD, .SDcols = is.factor])
-  # dt[, (nn) := lapply(.SD, as.character),
-  #    .SDcols = nn]
-  
+
   return(dt)
 }
 
@@ -556,30 +518,6 @@ db_dist_stats_sac <- function(cache,
     fsubset(distribution_type %in% c("micro", "imputed"))
     
     # 2. Micro and Imputed Data: Level & Area Estimation  ----
-  
-    # md_id_area <- dt |>
-    #   fsubset(distribution_type %in% c("micro", "imputed")) |>
-    #   fselect(-c(distribution_type,welfare))|>
-    #   roworder(cache_id, imputation_id, reporting_level, area, welfare_ppp) |>
-    #   fgroup_by(cache_id, imputation_id, reporting_level, area)|>
-    #   fsummarise(res = list(wbpip:::md_compute_dist_stats(
-    #     welfare = welfare_ppp,
-    #     weight = weight)))|>
-    #   _[, c(.SD, .(
-    #     Statistic = names(unlist(res)),
-    #     Value = unlist(res))),
-    #     by = .(cache_id, imputation_id, reporting_level, area)]|>
-    #   fselect(-res)|>
-    #   pivot(ids = 1:5, how="w", values = "Value", names = "Statistic") |>
-    #   fgroup_by(cache_id, reporting_level, area)|>
-    #   collapg(custom= list(fmean= 6:20))|> # If we don't use windows we could use `parallel = TRUE`
-    #   fungroup()|>
-    #   frename(survey_median_ppp = median)|>
-    #   fmutate(reporting_level = as.character(reporting_level))
-    # 
-    # setrename(md_id_area, gsub("quantiles", "decile", names(md_id_area)))
-
-      # Version using wrapper function for wbpip::md_compute_dist_stats
 
     md_id_area <- dt_m |>
       fselect(-c(distribution_type))|>
@@ -591,38 +529,11 @@ db_dist_stats_sac <- function(cache,
       collapg(fmean, cols = c("mean","median","gini",
                        "polarization","mld",
                        paste0("decile",1:10)))|>
-      #collapg(custom= list(fmean= 5:19))|>
       fungroup()|>
       frename(survey_median_ppp = median)|>
       fmutate(reporting_level = as.character(reporting_level))
     
-    # 4. Micro and Imputed Data: National Estimation ----
-      
-    # md_id_national <- dt |>
-    #   fsubset(distribution_type %in% c("micro", "imputed")
-    #           & reporting_level == 'national' & area != "national") |>
-    #   fselect(-c(distribution_type,welfare))|>
-    #   roworder(cache_id, imputation_id, welfare_ppp) |>
-    #   fgroup_by(cache_id, imputation_id)|>
-    #   fsummarise(res = list(wbpip:::md_compute_dist_stats(
-    #     welfare = welfare_ppp,
-    #     weight = weight)))|>
-    #   _[, c(.SD, .(
-    #     Statistic = names(unlist(res)),
-    #     Value = unlist(res))),
-    #     by = .(cache_id, imputation_id)] |>
-    #   fselect(-res)|>
-    #   pivot(ids = 1:3, how="w", values = "Value", names = "Statistic") |>
-    #   fgroup_by(cache_id)|>
-    #   collapg(custom= list(fmean= 4:18))|>
-    #   fungroup()|>
-    #   frename(survey_median_ppp = median) |>
-    #   fmutate(reporting_level = as.character("national"),
-    #           area = as.character("national"))
-    # 
-    # setrename(md_id_national, gsub("quantiles", "decile", names(md_id_national)))
-    
-    # Version using wrapper function for wbpip::md_compute_dist_stats
+    # 3. Micro and Imputed Data: National Estimation ----
 
     md_id_national <- dt_m |>
         fsubset(reporting_level == 'national' & area != "national") |>
@@ -634,7 +545,6 @@ db_dist_stats_sac <- function(cache,
       collapg(fmean, cols = c("mean","median","gini",
                               "polarization","mld",
                               paste0("decile",1:10)))|>
-      #collapg(custom= list(fmean= 3:17))|>
       fungroup()|>
       frename(survey_median_ppp = median)|>
       fmutate(reporting_level = as.character("national"),
@@ -662,23 +572,7 @@ db_dist_stats_sac <- function(cache,
         fselect(-.joyn)
       
       
-      # 5. Group and Aggregate Data: Level and Area Estimation -----
-      # gd_ag_area <- dt_jn |>
-      #   fselect(-c(distribution_type, reporting_pop)) |>
-      #   roworder(cache_id, reporting_level, area, welfare)|>
-      #   fgroup_by(cache_id, reporting_level, area)|>
-      #   fsummarise(res = list(wbpip:::gd_compute_dist_stats(
-      #     welfare = welfare,
-      #     population = weight,
-      #     mean = funique(survey_mean_ppp))))|>
-      #   _[, c(.SD, .( # using _ because we are using native pipe
-      #     Statistic = names(unlist(res)),
-      #     Value = unlist(res))),
-      #     by = .(cache_id, reporting_level, area)] |>
-      #   fselect(-res)|>
-      #   pivot(ids = 1:3, how="w", values = "Value", names = "Statistic")|>
-      #   frename(survey_median_ppp = median)|>
-      #   fmutate(reporting_level = as.character(reporting_level))
+      # 4. Group and Aggregate Data: Level and Area Estimation -----
       
       gd_ag_area <- dt_jn |>
         fselect(-c(distribution_type, reporting_pop)) |>
@@ -692,35 +586,7 @@ db_dist_stats_sac <- function(cache,
 
       setrename(gd_ag_area, gsub("deciles", "decile", names(gd_ag_area)))
       
-      # 6. Aggregate Data: National estimation (synth needed) ----
-      # ag_national <- dt_jn |>
-      #   fsubset(distribution_type %in% c("aggregate")) |>
-      #   fselect(-c(distribution_type))|>
-      #   roworder(cache_id, reporting_level, area, welfare) |>
-      #   fgroup_by(cache_id, reporting_level, area)|>
-      #   fsummarise(welfare =  wbpip:::sd_create_synth_vector(
-      #     welfare = welfare,
-      #     population = weight,
-      #     mean = funique(survey_mean_ppp),
-      #     pop = funique(reporting_pop)
-      #   )$welfare,
-      #   weight = funique(reporting_pop)/100000) |> 
-      #   roworder(cache_id, welfare) |>
-      #   fgroup_by(cache_id) |>
-      #   fsummarise(res = list(wbpip:::md_compute_dist_stats(  
-      #     welfare = welfare,
-      #     weight = weight)))|>
-      #   _[, c(.SD, .( 
-      #     Statistic = names(unlist(res)), 
-      #     Value = unlist(res))),
-      #     by = .(cache_id)] |>
-      #   fselect(-res)|>
-      #   pivot(ids = 1, how="w", values = "Value", names = "Statistic")|>
-      #   fmutate(reporting_level = as.character("national"), 
-      #           area = as.character("national")) |>
-      #   frename(survey_median_ppp = median)
-      # 
-      # setrename(ag_national, gsub("quantiles", "decile", names(ag_national)))
+      # 5. Aggregate Data: National estimation (synth needed) ----
       
       ag_syn <- dt_jn |>
         fsubset(distribution_type %in% c("aggregate")) |>
@@ -744,21 +610,18 @@ db_dist_stats_sac <- function(cache,
         collapg(fmean, cols = c("mean","median","gini",
                                 "polarization","mld",
                                 paste0("decile",1:10)))|>
-        #collapg(custom= list(fmean= 3:17))|>
         fungroup()|>
         frename(survey_median_ppp = median)|>
         fmutate(reporting_level = as.character("national"),
                 area = as.character("national"))
       
-      # 7. Rowbind and return ----
+      # 6. Row bind and return ----
       
       final <- rowbind(md_id_area, md_id_national, gd_ag_area, ag_national)
       
       return(final)
       
     }
-    
-    # 7. Rowbind and return ----
 
     final <- rowbind(md_id_area, md_id_national)
   
@@ -836,7 +699,6 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
   )
   
   # Merge with PCE
-  
   
   dt <- data.table::merge.data.table(
     dt, pce_table,

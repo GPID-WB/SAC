@@ -551,11 +551,13 @@ to_compare <- svy_mean_lcu_table_sac[
 setkey(svy_mean_lcu_table_tar, "country_code")
 setkey(to_compare, "country_code")
 
+to_compare <- as.data.table(to_compare)
+
 all.equal(svy_mean_lcu_table_tar,
           to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE])
 
 waldo::compare(svy_mean_lcu_table_tar,
-               to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE], tolerance = 1e7)
+               to_compare[, colnames(svy_mean_lcu_table_tar), with = FALSE], tolerance = 1e-7)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## svy_mean_ppp_table --------

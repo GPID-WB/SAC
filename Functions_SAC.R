@@ -667,12 +667,12 @@ db_dist_stats_sac <- function(cache,
       #   fselect(-c(distribution_type, reporting_pop)) |>
       #   roworder(cache_id, reporting_level, area, welfare)|>
       #   fgroup_by(cache_id, reporting_level, area)|>
-      #   fsummarise(res = list(wbpip:::gd_compute_dist_stats(  
+      #   fsummarise(res = list(wbpip:::gd_compute_dist_stats(
       #     welfare = welfare,
       #     population = weight,
       #     mean = funique(survey_mean_ppp))))|>
-      #   _[, c(.SD, .( # using _ because we are using native pipe 
-      #     Statistic = names(unlist(res)), 
+      #   _[, c(.SD, .( # using _ because we are using native pipe
+      #     Statistic = names(unlist(res)),
       #     Value = unlist(res))),
       #     by = .(cache_id, reporting_level, area)] |>
       #   fselect(-res)|>
@@ -683,7 +683,6 @@ db_dist_stats_sac <- function(cache,
       gd_ag_area <- dt_jn |>
         fselect(-c(distribution_type, reporting_pop)) |>
         roworder(cache_id, reporting_level, area, welfare)|>
-        fgroup_by(cache_id, reporting_level, area)|>
         _[, as.list(wrp_gd_dist_stats(welfare = welfare,
                                       population = weight,
                                       mean = funique(survey_mean_ppp))),
@@ -732,8 +731,7 @@ db_dist_stats_sac <- function(cache,
           welfare = welfare,
           population = weight,
           mean = funique(survey_mean_ppp),
-          pop = funique(reporting_pop)
-        )$welfare,
+          pop = funique(reporting_pop))$welfare,
         weight = funique(reporting_pop)/100000) 
       
       # Aggregate to national

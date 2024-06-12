@@ -114,3 +114,29 @@ if (requireNamespace("highcharter")) {
 } else {
   boxplot(bench, outline = FALSE)
 }
+
+bench <- microbenchmark::microbenchmark(
+  times = 100,
+  datatable = {
+    dt[dt$area=="","area"] <- "national"
+  },
+  collapse = {
+    setv(dt2$area,"", "national")
+  }
+)
+if (requireNamespace("highcharter")) {
+  hc_dt <- highcharter::data_to_boxplot(bench,
+                                        time,
+                                        expr,
+                                        add_outliers = FALSE,
+                                        name = "Time in milliseconds")
+  
+  highcharter::highchart() |>
+    highcharter::hc_xAxis(type = "category") |>
+    highcharter::hc_chart(inverted=TRUE) |>
+    highcharter::hc_add_series_list(hc_dt) |>
+    highcharter::hc_title(text = "Comparison setv")
+  
+} else {
+  boxplot(bench, outline = FALSE)
+}

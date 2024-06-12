@@ -88,3 +88,29 @@ if (requireNamespace("highcharter")) {
   boxplot(bench, outline = FALSE)
 }
 
+bench <- microbenchmark::microbenchmark(
+  times = 100,
+  collapse = {
+    new_value = rowbind(md_id_area, md_id_national, gd_ag_area, ag_national)
+  },
+  datatable = {
+    old_value = rbindlist(list(md_id_area, md_id_national,
+                               gd_ag_area, ag_national), use.names = TRUE)
+  }
+)
+if (requireNamespace("highcharter")) {
+  hc_dt <- highcharter::data_to_boxplot(bench,
+                                        time,
+                                        expr,
+                                        add_outliers = FALSE,
+                                        name = "Time in milliseconds")
+  
+  highcharter::highchart() |>
+    highcharter::hc_xAxis(type = "category") |>
+    highcharter::hc_chart(inverted=TRUE) |>
+    highcharter::hc_add_series_list(hc_dt) |>
+    highcharter::hc_title(text = "Comparison rowbind and rbindlist")
+  
+} else {
+  boxplot(bench, outline = FALSE)
+}

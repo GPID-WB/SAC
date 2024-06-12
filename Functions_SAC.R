@@ -718,9 +718,9 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
     rlang::warn(c(
       sprintf(
         "Removing %s rows with missing `survey_mean_ppp`: ",
-        sum(is.na(dt$survey_mean_ppp))
+        fsum(is.na(dt$survey_mean_ppp))
       ),
-      unique(dt[is.na(survey_mean_ppp)]$cache_id)
+      funique(dt[is.na(survey_mean_ppp)]$cache_id)
     ))
     dt <- dt[!is.na(survey_mean_ppp), ]
   }
@@ -731,9 +731,9 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
     rlang::warn(c(
       sprintf(
         "Removing %s rows with missing `ppp`:",
-        sum(is.na(dt$ppp))
+        fsum(is.na(dt$ppp))
       ),
-      unique(dt[is.na(ppp)]$cache_id)
+      funique(dt[is.na(ppp)]$cache_id)
     ))
     dt <- dt[!is.na(ppp), ]
   }
@@ -769,7 +769,8 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
     "estimation_type",
     "display_cp"
   )
-  dt <- dt[, .SD, .SDcols = cols]
+  
+  dt <- fselect(dt, cols)
   
   return(dt)
 }

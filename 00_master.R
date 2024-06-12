@@ -125,6 +125,12 @@ cache_tb <- rowbind(cache_ls, fill = TRUE)
 source("Functions_SAC.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 0. Create cache for SAC  ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+cache_sac <- get_cache(cache_tb)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -135,9 +141,6 @@ source("Functions_SAC.R")
 Means_pipeline_sac <- function(cache_inventory, 
                                cache, 
                                dl_aux){
-  
-  
-  cache <- get_cache(cache)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Group data means --------
@@ -197,7 +200,7 @@ Means_pipeline_tar <- function(cache_inventory,
 
 # Load output:
 means_out_sac <- Means_pipeline_sac(cache_inventory, 
-                                    cache_tb, 
+                                    cache_sac, 
                                     dl_aux)
 means_out_tar <- Means_pipeline_tar(cache_inventory, 
                                     cache_ls, 
@@ -232,8 +235,6 @@ waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 
 Dist_stats_sac <- function(cache, 
                            dsm_table){
-  
-  cache <- get_cache(cache)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Calculate Distributional Statistics --------
@@ -279,7 +280,7 @@ Dist_stats_tar <- function(cache,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Load output:
-dist_out_sac <- Dist_stats_sac(cache = cache_tb, 
+dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
                                dsm_table = means_out_sac)
 
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,

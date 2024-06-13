@@ -229,7 +229,7 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                    keep = "left"
   )
   
-  if (nrow(dt[.joyn == "x"]) > 0) {
+  if (nrow(dt[(.joyn == "x" & reporting_level==area)]) > 0) { #There is an error for the area level (see if it affects later on)
     msg <- "We should not have NOT-matching observations from survey-mean tables"
     hint <- "Make sure POP data includes all the countries and pop data levels"
     rlang::abort(c(

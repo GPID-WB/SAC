@@ -33,17 +33,6 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-# if (Sys.info()['user'] ==  "wb535623") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
-#   
-# } else if (Sys.info()['user'] ==  "wb622077") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-# }
-
 config <- config::get(config = Sys.info()['user'])
 base_dir <- config$base_dir
 
@@ -74,18 +63,6 @@ base_dir |>
 
 ## Change gls outdir:
 
-# if (Sys.info()['user'] ==  "wb535623") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
-#   
-# } else if (Sys.info()['user'] ==  "wb622077") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-#   
-# }
-
 if (!is.null(config$cache_dir)) {
   gls$CACHE_SVY_DIR_PC <- config$cache_dir
 }
@@ -103,15 +80,20 @@ if (!is.null(config$cache_dir)) {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
-                                       cache_inventory$cache_id %like% "BOL" |
-                                       cache_inventory$cache_id %like% "NGA"),]
+# cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
+#                                        cache_inventory$cache_id %like% "BOL" |
+#                                        cache_inventory$cache_id %like% "NGA"),]
 cache_ids <- get_cache_id(cache_inventory) 
+cache_dir <- get_cache_files(cache_inventory)
 
 ### Full Cache ---------
 
 # In list format:
-cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = gls$vintage_dir) 
+cache_ls <- pipload::pip_load_cache(type="list", version = gls$vintage_dir) 
+
+# remove all the surveyar that are not available in the PFW ----
+
+source("PFW_fix.R")
 
 # In dt format:
 cache_tb <- rowbind(cache_ls, fill = TRUE) 
@@ -129,7 +111,7 @@ source("Functions_SAC.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 cache_sac <- get_cache(cache_tb)
-
+rm(cache_tb)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

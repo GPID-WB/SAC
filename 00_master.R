@@ -189,15 +189,15 @@ means_out_tar <- Means_pipeline_tar(cache_inventory,
                                     dl_aux)
 
 # Filter without new area-level calculations
-compare_sac <- means_out_sac[means_out_sac$area == "national" | 
-                               means_out_sac$reporting_level == means_out_sac$area, -c("area")]
+# compare_sac <- means_out_sac[means_out_sac$area == "national" | 
+#                                means_out_sac$reporting_level == means_out_sac$area, -c("area")]
 
 # Eliminate attributes 
-compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+compare_sac <- as.data.table(lapply(means_out_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
-data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
+data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level, ppp_data_level)
 
 # Order columns
 compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]

@@ -89,44 +89,73 @@ db_compute_survey_mean_sac <- function(cache,
   
   # ------ Micro data urban/rural -----
   
-  dt <- cache |>
+  # dt <- cache_sac |>
+  #   fsubset(distribution_type %in% c("imputed", "micro"))
+  # 
+  # dt_m <- dt |>
+  #   fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
+  #   collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+  #   fgroup_by(cache_id, reporting_level, area)|>
+  #   collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  #   fungroup()
+  # 
+  # dt_meta_vars <- dt |>
+  #   get_vars(metadata_vars) |> 
+  #   funique(cols = c("cache_id", "reporting_level", "area")) 
+  # 
+  # add_vars(dt_m) <- dt_meta_vars|>
+  #   fselect(-c(cache_id, reporting_level, area))
+  
+  # ----- Micro data national -----
+  
+  # tst7 <- cache_sac[, .(ind = length(unique(welfare))), by = c("cache_id","reporting_level", "area")]
+  # 
+  # dt <- dt_m |>
+  #   _[, ind := length(unique(area)), by = c("cache_id","reporting_level")]|>
+  #   fsubset(area != "national" & reporting_level == "national")
+  # 
+  # dt_nat <- dt |>
+  #   fgroup_by(cache_id, reporting_level)|>
+  #   collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  #   fungroup()|>
+  #   fmutate(area = "national")
+  # 
+  # dt_meta_vars <- dt |> 
+  #   get_vars(metadata_vars) |> 
+  #   funique(cols = c("cache_id", "reporting_level")) 
+  # 
+  # add_vars(dt_nat) <- dt_meta_vars|>
+  #   fselect(-c(cache_id, reporting_level,area))
+  
+  dt <- cache_sac |>
     fsubset(distribution_type %in% c("imputed", "micro"))
   
-  dt_m <- dt |>
-    fgroup_by(cache_id, reporting_level, area, imputation_id)|> 
+  dt_c <- dt |>
+    fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+              gdp_data_level, pce_data_level,
+              pop_data_level, reporting_level, 
+              imputation_id)|> 
     collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
-    fgroup_by(cache_id, reporting_level, area)|>
+    fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+              gdp_data_level, pce_data_level,
+              pop_data_level, reporting_level)|>
     collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
     fungroup()
   
   dt_meta_vars <- dt |>
     get_vars(metadata_vars) |> 
-    funique(cols = c("cache_id", "reporting_level", "area")) 
+    funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
+                     "gdp_data_level", "pce_data_level",
+                     "pop_data_level", "reporting_level")) 
   
-  add_vars(dt_m) <- dt_meta_vars|>
-    fselect(-c(cache_id, reporting_level, area))
-  
-  # ----- Micro data national -----
-  
-  dt <- dt_m |>
-    fsubset(area != "national" & reporting_level == "national")
-  
-  dt_nat <- dt |>
-    fgroup_by(cache_id, reporting_level)|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
-    fungroup()|>
-    fmutate(area = "national")
-  
-  dt_meta_vars <- dt |> 
-    get_vars(metadata_vars) |> 
-    funique(cols = c("cache_id", "reporting_level")) 
-  
-  add_vars(dt_nat) <- dt_meta_vars|>
-    fselect(-c(cache_id, reporting_level,area))
+  add_vars(dt_c) <- dt_meta_vars|>
+    fselect(-c(cache_id, cpi_data_level, ppp_data_level,
+               gdp_data_level, pce_data_level,
+               pop_data_level, reporting_level))
   
   # All micro and imputed data
   
-  dt_c <- collapse::rowbind(dt_m, dt_nat)
+  #dt_c <- collapse::rowbind(dt_m, dt_nat)
   
   #  ------ Group data -----
   
@@ -221,15 +250,17 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   # --- Reporting_pop ----
   
   dt <- joyn::joyn(dt, pop_table,
-                   by = c("country_code", 
+                   by = c("country_code",
                           "reporting_year = year",
-                          "area = pop_data_level"
+                          #"area = pop_data_level"
+                          "pop_data_level"
                    ),
                    match_type = "m:1",
                    keep = "left"
   )
   
-  if (nrow(dt[(.joyn == "x" & reporting_level==area)]) > 0) { #There is an error for the area level (see if it affects later on)
+  #if (nrow(dt[(.joyn == "x" & reporting_level==area)]) > 0) { #There is an error for the area level (see if it affects later on)
+  if (nrow(dt[.joyn == "x"]) > 0) { 
     msg <- "We should not have NOT-matching observations from survey-mean tables"
     hint <- "Make sure POP data includes all the countries and pop data levels"
     rlang::abort(c(
@@ -257,11 +288,13 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
     joyn::joyn(pop_table, 
                by = c("country_code", 
                       "year_rnd = year",
-                      "area = pop_data_level"
+                      #"area = pop_data_level"
+                      "pop_data_level"
                ),
                match_type = "m:1",
                keep = "left"
     )
+  
   
   if (nrow(dt_svy_pop[.joyn == "x"]) > 0) {
     msg <- "We should not have NOT-matching observations from survey-mean tables"
@@ -276,7 +309,8 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
   
   dt_svy_pop <- dt_svy_pop|>
     fgroup_by(survey_id, country_code, survey_year,
-              reporting_level, area)|>
+              #reporting_level, area)|>
+              reporting_level)|>
     collapg(custom = list(fmean = "pop"), w = diff)|>
     frename(survey_pop = pop)|>
     fungroup()
@@ -285,8 +319,8 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
                    by = c("survey_id", 
                           "country_code", 
                           "survey_year",
-                          "reporting_level",
-                          "area"
+                          "reporting_level"
+                          #"area"
                    ),
                    match_type = "m:1",
                    keep = "left"
@@ -394,7 +428,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                                   sprintf("%s - %s",
                                           data.table::first(reporting_year),
                                           data.table::last(reporting_year))),
-     by = c("country_code", "area", "survey_comparability")
+     #by = c("country_code", "area", "survey_comparability")
+     by = c("country_code", "survey_comparability")
   ] 
   
   #--------- Finalize table ---------
@@ -404,20 +439,21 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
   
   # Add is_used_for_line_up column
   
-  dt <- dt |>
-    joyn::joyn(create_line_up_check(dt[area=="national" | reporting_level == area]),
-                   by = c("cache_id", "reporting_level", "area"),
-                   match_type = "m:1",
-                   y_vars_to_keep = "is_used_for_line_up")
-    
+  # dt <- dt |>
+  #   joyn::joyn(create_line_up_check(dt[area=="national" | reporting_level == area]),
+  #                  by = c("cache_id", "reporting_level", "area"),
+  #                  match_type = "m:1",
+  #                  y_vars_to_keep = "is_used_for_line_up")
+  
+  dt <- create_line_up_check(dt)
   
   #dt[is.na(dt$is_used_for_line_up), "is_used_for_line_up"] <- FALSE
   
-  setv(dt$is_used_for_line_up,is.na(dt$is_used_for_line_up), FALSE)
-  
-  dt <- dt|>
-    fsubset(.joyn != "y")|>
-    fselect(-.joyn)
+  # setv(dt$is_used_for_line_up,is.na(dt$is_used_for_line_up), FALSE)
+  # 
+  # dt <- dt|>
+  #   fsubset(.joyn != "y")|>
+  #   fselect(-.joyn)
   
   # Add is_used_for_aggregation column
   dt[, n_rl := .N, by = cache_id]
@@ -438,7 +474,8 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
                  "survey_mean_ppp", "reporting_pop", "ppp",
                  "cpi", "pop_data_level", "gdp_data_level",
                  "pce_data_level", "cpi_data_level", "ppp_data_level", 
-                 "reporting_level", "area", "distribution_type",
+                 #"reporting_level", "area", "distribution_type",
+                 "reporting_level", "distribution_type",
                  "gd_type", "is_interpolated", "is_used_for_line_up",
                  "is_used_for_aggregation", "display_cp")
   
@@ -463,7 +500,7 @@ db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
               w = reporting_pop)|>
       fmutate(ppp                     = NA,  
               cpi                     = NA,
-              area                    = "national",
+              #area                    = "national",
               pop_data_level          = "national", 
               gdp_data_level          = "national",
               pce_data_level          = "national",

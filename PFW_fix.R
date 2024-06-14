@@ -15,17 +15,20 @@
 
 ### remove all the surveyar that are not available in the PFW ----
 
-svy_in_pfw <- dl_aux$pfw[, link] 
+svy_in_pfw <- dl_aux$pfw[, link]
 
 pattern <-  "([[:alnum:]]{3}_[[:digit:]]{4}_[[:alnum:]\\-]+)(.*)"
+
 cache_names <- 
   names(cache_ls) |> 
   gsub(pattern = pattern, 
        replacement = "\\1", 
        x = _)
 
+#names(cache_dir) <-  cache_ids
+
 cache_dir_names <- 
-  names(cache_dir) |> 
+  cache_ids |> 
   gsub(pattern = pattern, 
        replacement = "\\1", 
        x = _)

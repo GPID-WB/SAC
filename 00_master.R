@@ -265,6 +265,9 @@ Dist_stats_tar <- function(cache,
 dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
                                dsm_table = means_out_sac)
 
+# Need to recreate the cache_ids because now they are NULL:
+cache_ids <- get_cache_id(cache_inventory)
+
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,
                                dsm_table = means_out_tar,
                                dl_aux = dl_aux,

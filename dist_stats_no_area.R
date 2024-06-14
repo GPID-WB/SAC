@@ -77,7 +77,8 @@ md_id_area <- dt_m |>
                           paste0("decile",1:10)))|>
   fungroup()|>
   frename(survey_median_ppp = median)|>
-  fmutate(reporting_level = as.character(reporting_level))
+  fmutate(reporting_level = as.character(reporting_level),
+          pop_data_level = as.character(pop_data_level))
 
 # 3. Micro and Imputed Data: National Estimation ----
 
@@ -95,7 +96,12 @@ md_id_national <- dt_m |>
                           paste0("decile",1:10)))|>
   fungroup()|>
   frename(survey_median_ppp = median)|>
-  fmutate(reporting_level = as.character("national"))
+  fmutate(reporting_level = as.character("national"),
+          cpi_data_level = as.character("national"),
+          ppp_data_level = as.character("national"),
+          pce_data_level = as.character("national"),
+          pop_data_level = as.character("national"),
+          gdp_data_level = as.character("national"))
 
 
 # Select variables, subset and join mean table
@@ -146,7 +152,8 @@ gd_ag_area <- dt_jn |>
            gdp_data_level, pce_data_level,
            pop_data_level, reporting_level)]|>
   frename(survey_median_ppp = median)|>
-  fmutate(reporting_level = as.character(reporting_level))
+  fmutate(reporting_level = as.character(reporting_level),
+          pop_data_level = as.character(pop_data_level))
 
 
 setrename(gd_ag_area, gsub("deciles", "decile", names(gd_ag_area)))
@@ -183,108 +190,120 @@ ag_national <- ag_syn |>
                           paste0("decile",1:10)))|>
   fungroup()|>
   frename(survey_median_ppp = median)|>
-  fmutate(reporting_level = as.character("national"))
+  fmutate(reporting_level = as.character("national"),
+          cpi_data_level = as.character("national"),
+          ppp_data_level = as.character("national"),
+          pce_data_level = as.character("national"),
+          pop_data_level = as.character("national"),
+          gdp_data_level = as.character("national"))
 
-# Comparison
 
-final <- rowbind(md_id_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                 md_id_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                 gd_ag_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                 ag_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization))
 
-# Create quick comparison with dist_out_ta
-compare_dist_sac <- final |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+
+# Comparison ----
+
+final <- rowbind(md_id_area, md_id_national, gd_ag_area, ag_national)
+
+# Create quick comparison with dist_out_tar
+compare_dist_sac <- final |> fselect(-c(cpi_data_level, ppp_data_level, gdp_data_level, pce_data_level))
 setorder(compare_dist_sac, cache_id, reporting_level)
 compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
-compare_dist_tar <- dist_out_tar |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+compare_dist_tar <- dist_out_tar |> fselect(colnames(compare_dist_sac))
 setorder(compare_dist_tar, cache_id, reporting_level)
 compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
-waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7)
+
+waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-4) # All match
+waldo::compare(compare_dist_tar |> fselect(-c(polarization, mld)), 
+               compare_dist_sac |> fselect(-c(polarization, mld)), tolerance = 1e-7) # polarization and mld (only) do not match here
 
 
 
 
 
 
-# noD2 Comparison ----
-md_id_national_noD2 <-  md_id_national |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source != TRUE)
-
-md_id_area_noD2 <- md_id_area |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source != TRUE)
-
-gd_ag_area_noD2 <- gd_ag_area |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source != TRUE)
-
-ag_national_noD2 <- ag_national |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source != TRUE)
-
-dist_out_tar_noD2 <- dist_out_tar |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source != TRUE)
 
 
-final_noD2 <- rowbind(md_id_area_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                      md_id_national_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                      gd_ag_area_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
-                      ag_national_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization))
 
 
-# Create quick comparison with dist_out_ta
-compare_dist_sac <- final_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_sac, cache_id, reporting_level)
-compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
-
-compare_dist_tar <- dist_out_tar_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_tar, cache_id, reporting_level)
-compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
-waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7)
-# no differences
-
-# Only D2 comparison ----
-D2_cache_ids <- setdiff(final$cache_id, final_noD2$cache_id)
-
-final_D2 <- rowbind(md_id_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
-                    md_id_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
-                    gd_ag_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
-                    ag_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids))
-
-dist_out_tar_D2 <- dist_out_tar |> fsubset(cache_id %in% D2_cache_ids)
-
-compare_dist_sac <- final_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_sac, cache_id, reporting_level)
-compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
-
-compare_dist_tar <- dist_out_tar_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_tar, cache_id, reporting_level)
-compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
-waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7, max_diffs = Inf)
-
-# Only NOT micro and D2 ----
-micro_D2_cache_ids <- cache_sac |> 
-  fselect(cache_id, distribution_type) |> 
-  fsubset(distribution_type == "micro") |>
-  fmutate(source = grepl("D2", cache_id)) |>
-  fsubset(source)
-
-final_no_micro_D2 <- rowbind(md_id_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
-                             md_id_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
-                             gd_ag_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
-                             ag_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id))
-
-dist_out_tar_no_micro_D2 <- dist_out_tar |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id)
-
-
-compare_dist_sac <- final_no_micro_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_sac, cache_id, reporting_level)
-compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
-
-compare_dist_tar <- dist_out_tar_no_micro_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
-setorder(compare_dist_tar, cache_id, reporting_level)
-compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
-waldo::compare(compare_dist_tar, compare_dist_sac, tolerance , max_diffs = Inf)
+# # NoD2 Comparison ----
+#   md_id_national_noD2 <-  md_id_national |>
+#     fmutate(source = grepl("D2", cache_id)) |>
+#     fsubset(source != TRUE)
+#   
+#   md_id_area_noD2 <- md_id_area |>
+#     fmutate(source = grepl("D2", cache_id)) |>
+#     fsubset(source != TRUE)
+#   
+#   gd_ag_area_noD2 <- gd_ag_area |>
+#     fmutate(source = grepl("D2", cache_id)) |>
+#     fsubset(source != TRUE)
+#   
+#   ag_national_noD2 <- ag_national |>
+#     fmutate(source = grepl("D2", cache_id)) |>
+#     fsubset(source != TRUE)
+#   
+#   dist_out_tar_noD2 <- dist_out_tar |>
+#     fmutate(source = grepl("D2", cache_id)) |>
+#     fsubset(source != TRUE)
+#     
+#   
+#   final_noD2 <- rowbind(md_id_area_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
+#                    md_id_national_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
+#                    gd_ag_area_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization), 
+#                    ag_national_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization))
+# 
+# 
+# # Create quick comparison with dist_out_ta
+# compare_dist_sac <- final_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_sac, cache_id, reporting_level)
+# compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
+# 
+# compare_dist_tar <- dist_out_tar_noD2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_tar, cache_id, reporting_level)
+# compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
+# waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7)
+# # no differences
+# 
+# # Only D2 comparison ----
+# D2_cache_ids <- setdiff(final$cache_id, final_noD2$cache_id)
+# 
+# final_D2 <- rowbind(md_id_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
+#                     md_id_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
+#                     gd_ag_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids), 
+#                     ag_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(cache_id %in% D2_cache_ids))
+# 
+# dist_out_tar_D2 <- dist_out_tar |> fsubset(cache_id %in% D2_cache_ids)
+# 
+# compare_dist_sac <- final_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_sac, cache_id, reporting_level)
+# compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
+# 
+# compare_dist_tar <- dist_out_tar_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_tar, cache_id, reporting_level)
+# compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
+# waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7, max_diffs = Inf)
+# 
+# # Only NOT micro and D2 ----
+# micro_D2_cache_ids <- cache_sac |> 
+#   fselect(cache_id, distribution_type) |> 
+#   fsubset(distribution_type == "micro") |>
+#   fmutate(source = grepl("D2", cache_id)) |>
+#   fsubset(source)
+#   
+# final_no_micro_D2 <- rowbind(md_id_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
+#                              md_id_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
+#                              gd_ag_area |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id), 
+#                              ag_national |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization) |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id))
+# 
+# dist_out_tar_no_micro_D2 <- dist_out_tar |> fsubset(!cache_id %in% micro_D2_cache_ids$cache_id)
+# 
+# 
+# compare_dist_sac <- final_no_micro_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_sac, cache_id, reporting_level)
+# compare_dist_sac <- as.data.table(lapply(compare_dist_sac, function(x) { attributes(x) <- NULL; return(x) }))
+# 
+# compare_dist_tar <- dist_out_tar_no_micro_D2 |> fselect(cache_id, reporting_level, decile1, decile5, decile10, mean, polarization)
+# setorder(compare_dist_tar, cache_id, reporting_level)
+# compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
+# waldo::compare(compare_dist_tar, compare_dist_sac, tolerance , max_diffs = Inf)

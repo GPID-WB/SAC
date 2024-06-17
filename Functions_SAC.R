@@ -683,7 +683,7 @@ db_dist_stats_sac <- function(cache,
                  gdp_data_level, pce_data_level)) # immediate
     
     
-    setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_area)))
+    setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_level)))
     
     # 5. Aggregate Data: National estimation (synth needed) ----
     
@@ -791,7 +791,8 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
   dt <- joyn::joyn(dsm_table, 
                    dist_table, 
                    match_type = "1:1",
-                   by = c("cache_id","pop_data_level","reporting_level","area"),
+                   #by = c("cache_id","pop_data_level","reporting_level","area"),
+                   by = c("cache_id","pop_data_level","reporting_level"),
                    reportvar = FALSE)
   
   # Merge with GDP
@@ -859,7 +860,8 @@ db_create_svy_estimation_table_sac <- function(dsm_table, dist_table, gdp_table,
     "country_code", "reporting_year", "surveyid_year",
     "survey_year", "survey_time", "survey_acronym", "survey_coverage",
     "survey_comparability", "comparable_spell", "welfare_type",
-    "reporting_level", "area",
+    #"reporting_level", "area",
+    "reporting_level",
     "survey_mean_lcu", "survey_mean_ppp",
     "survey_median_ppp", "survey_median_lcu",
     "predicted_mean_ppp", "ppp", "cpi",

@@ -57,6 +57,7 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Sys.setenv(PIP_ROOT_DIR = "//w1wbgencifs01/pip/")
+
 base_dir |>
   fs::path("_common.R") |>
   source(echo = FALSE)
@@ -80,9 +81,6 @@ if (!is.null(config$cache_dir)) {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-# cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
-#                                        cache_inventory$cache_id %like% "BOL" |
-#                                        cache_inventory$cache_id %like% "NGA"),]
 cache_ids <- get_cache_id(cache_inventory) 
 cache_dir <- get_cache_files(cache_inventory)
 
@@ -90,13 +88,11 @@ cache_dir <- get_cache_files(cache_inventory)
 
 # In list format:
 
-#tic()
 cache_ls <- pipload::pip_load_cache(type="list", version = gls$vintage_dir) 
-#toc()
 
 # remove all the surveyar that are not available in the PFW ----
 
-source("PFW_fix.R") # This gives an error, expected.
+source("PFW_fix.R") 
 
 # In dt format:
 cache_tb <- rowbind(cache_ls, fill = TRUE) 
@@ -115,6 +111,7 @@ source("Functions_SAC.R")
 
 cache_sac <- get_cache(cache_tb)
 rm(cache_tb)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -213,7 +210,7 @@ all.equal(means_out_tar,compare_sac)
 
 waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 
-
+rm(compare_sac)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Dist Stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -271,12 +268,8 @@ Dist_stats_tar <- function(cache,
 dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
                                dsm_table = means_out_sac)
 
-# now, our cache_id is empty. We just re create it using the cache_inventory:
-# I thought I applied the changes to PFW_fix.R but I still need this to not have it NULL:
-cache_ids <- get_cache_id(cache_inventory) # a character vector
-
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,
-                               dsm_table = means_out_tar, # used the one we created 
+                               dsm_table = means_out_tar, 
                                dl_aux = dl_aux,
                                cache_ids = cache_ids,
                                py = py,
@@ -333,13 +326,13 @@ Prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = means_out_
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Filter without new area-level calculations
-to_compare <- Prod_svy_estimation_sac[
-  Prod_svy_estimation_sac$area == "national" | 
-    Prod_svy_estimation_sac$reporting_level == Prod_svy_estimation_sac$area,
-  -c("area")]
+# to_compare <- Prod_svy_estimation_sac[
+#   Prod_svy_estimation_sac$area == "national" | 
+#     Prod_svy_estimation_sac$reporting_level == Prod_svy_estimation_sac$area,
+#   -c("area")]
 
 # Eliminate attributes 
-to_compare <- as.data.table(lapply(to_compare, function(x) { attributes(x) <- NULL; return(x) }))
+to_compare <- as.data.table(lapply(Prod_svy_estimation_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Set similar keys
 setkey(Prod_svy_estimation_tar, "country_code")

@@ -285,7 +285,9 @@ dist_out_tar <- Dist_stats_tar(cache = cache_ls,
 
 
 # Filter without new area-level calculations
-compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]
+# compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]
+
+compare_sac <- dist_out_sac
 
 # Eliminate attributes 
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))

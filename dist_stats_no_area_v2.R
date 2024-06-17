@@ -137,7 +137,7 @@ gd_ag_level <- dt_jn |>
              gdp_data_level, pce_data_level)) # immediate
 
 
-setrename(gd_ag_area, gsub("deciles", "decile", names(gd_ag_area)))
+setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_area)))
 
 # 5. Aggregate Data: National estimation (synth needed) ----
 

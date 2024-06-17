@@ -73,7 +73,7 @@ wrp_md_dist_stats <- function(welfare,
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## 1. wrp_gd_dist_stats -----
+## 2. wrp_gd_dist_stats -----
 ##
 ## Objective: Wrapper for wbpip function `wbpip::gd_compute_dist_stats`  
 ## (Diana comment: If this works it could be implemented in wbpip)
@@ -172,6 +172,32 @@ wrp_gd_dist_stats <- function(welfare,
   )], unlist(out["deciles"]))
   
   return(out)
+}
+
+
+## 2.1 safe wrp_gd_dist_stats ----
+# Safe GD estimation
+safe_wrp_gd_dist_stats <- function(welfare, population, mean, cache_id) {
+  tryCatch(
+    
+    # Run function:
+    expr = {
+      
+      res <- wrp_gd_dist_stats(welfare = welfare, 
+                               population = population, 
+                               mean = mean)
+      
+      # Return if it works
+      return(res)
+    },
+    
+    # If error:
+    error = function(e) {
+      rlang::warn("Distributional statistics caluclation failed. Returning NULL.")
+      
+      return(NULL)
+    }
+  )
 }
 
 

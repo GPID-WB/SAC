@@ -33,17 +33,6 @@ identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
-# if (Sys.info()['user'] ==  "wb535623") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   base_dir <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/pip_ingestion_pipeline")
-#   
-# } else if (Sys.info()['user'] ==  "wb622077") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   base_dir <- fs::path("E:/01.personal/wb622077/pip_ingestion_pipeline")
-# }
-
 config <- config::get(config = Sys.info()['user'])
 base_dir <- config$base_dir
 
@@ -67,24 +56,12 @@ withr::with_dir(new = base_dir,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+Sys.setenv(PIP_ROOT_DIR = "//w1wbgencifs01/pip/")
 base_dir |>
   fs::path("_common.R") |>
   source(echo = FALSE)
 
 ## Change gls outdir:
-
-# if (Sys.info()['user'] ==  "wb535623") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/Povcalnet/01.personal/wb535623/PIP/Cache") 
-#   
-# } else if (Sys.info()['user'] ==  "wb622077") {
-#   
-#   #Need to add Povcalnet if in remote computer
-#   gls$CACHE_SVY_DIR_PC <- fs::path("E:/01.personal/wb622077/cache")
-#   
-# }
 
 if (!is.null(config$cache_dir)) {
   gls$CACHE_SVY_DIR_PC <- config$cache_dir
@@ -103,15 +80,23 @@ if (!is.null(config$cache_dir)) {
 ### Cache inventory ---------
 
 cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
-                                       cache_inventory$cache_id %like% "BOL" |
-                                       cache_inventory$cache_id %like% "NGA"),]
+# cache_inventory <- cache_inventory[(cache_inventory$cache_id %like% "CHN" | 
+#                                        cache_inventory$cache_id %like% "BOL" |
+#                                        cache_inventory$cache_id %like% "NGA"),]
 cache_ids <- get_cache_id(cache_inventory) 
+cache_dir <- get_cache_files(cache_inventory)
 
 ### Full Cache ---------
 
 # In list format:
-cache_ls <- pipload::pip_load_cache(c("BOL","CHN","NGA"), type="list", version = gls$vintage_dir) 
+
+#tic()
+cache_ls <- pipload::pip_load_cache(type="list", version = gls$vintage_dir) 
+#toc()
+
+# remove all the surveyar that are not available in the PFW ----
+
+source("PFW_fix.R") # This gives an error, expected.
 
 # In dt format:
 cache_tb <- rowbind(cache_ls, fill = TRUE) 
@@ -129,7 +114,7 @@ source("Functions_SAC.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 cache_sac <- get_cache(cache_tb)
-
+rm(cache_tb)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -199,23 +184,26 @@ Means_pipeline_tar <- function(cache_inventory,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Load output:
+
 means_out_sac <- Means_pipeline_sac(cache_inventory, 
                                     cache_sac, 
                                     dl_aux)
+
 means_out_tar <- Means_pipeline_tar(cache_inventory, 
                                     cache_ls, 
                                     dl_aux)
 
+
 # Filter without new area-level calculations
-compare_sac <- means_out_sac[means_out_sac$area == "national" | 
-                               means_out_sac$reporting_level == means_out_sac$area, -c("area")]
+# compare_sac <- means_out_sac[means_out_sac$area == "national" | 
+#                                means_out_sac$reporting_level == means_out_sac$area, -c("area")]
 
 # Eliminate attributes 
-compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+compare_sac <- as.data.table(lapply(means_out_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
-data.table::setorder(means_out_tar, survey_id, cache_id, reporting_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
+data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level, ppp_data_level)
 
 # Order columns
 compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
@@ -240,7 +228,7 @@ Dist_stats_sac <- function(cache,
   ## Calculate Distributional Statistics --------
   
   db_dist_stats <- db_dist_stats_sac(cache = cache,
-                                         mean_table = dsm_table)
+                                     mean_table = dsm_table)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Add/remove relevant variables --------
@@ -283,15 +271,23 @@ Dist_stats_tar <- function(cache,
 dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
                                dsm_table = means_out_sac)
 
+# now, our cache_id is empty. We just re create it using the cache_inventory:
+# I thought I applied the changes to PFW_fix.R but I still need this to not have it NULL:
+cache_ids <- get_cache_id(cache_inventory) # a character vector
+
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,
-                               dsm_table = means_out_tar,
+                               dsm_table = means_out_tar, # used the one we created 
                                dl_aux = dl_aux,
                                cache_ids = cache_ids,
                                py = py,
                                cache_inventory = cache_inventory)
 
+
+
 # Filter without new area-level calculations
-compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]
+# compare_sac <- dist_out_sac[dist_out_sac$reporting_level == dist_out_sac$area, -c("area")]
+
+compare_sac <- dist_out_sac
 
 # Eliminate attributes 
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
@@ -321,16 +317,16 @@ waldo::compare(dist_out_tar,compare_sac, tolerance = 1e-7)
 ### Final table with means, dist stats, gdp and pce  ---------
 
 Prod_svy_estimation_sac <- db_create_svy_estimation_table_sac(dsm_table = means_out_sac, 
-                                                                 dist_table = dist_out_sac,
-                                                                 gdp_table = dl_aux$gdp,
-                                                                 pce_table = dl_aux$pce)
+                                                              dist_table = dist_out_sac,
+                                                              gdp_table = dl_aux$gdp,
+                                                              pce_table = dl_aux$pce)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 5.2 Target --------
 
 Prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = means_out_tar, 
-                                                             dist_table = dist_out_tar,
-                                                             gdp_table = dl_aux$gdp,
-                                                             pce_table = dl_aux$pce) 
+                                                          dist_table = dist_out_tar,
+                                                          gdp_table = dl_aux$gdp,
+                                                          pce_table = dl_aux$pce) 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 6. Replication Prod_svy_estimation   ---------

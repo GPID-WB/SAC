@@ -683,7 +683,7 @@ db_dist_stats_sac <- function(cache,
                  gdp_data_level, pce_data_level)) # immediate
     
     
-    setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_area)))
+    setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_level)))
     
     # 5. Aggregate Data: National estimation (synth needed) ----
     

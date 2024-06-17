@@ -47,7 +47,7 @@ cache_inventory[,
 
 cache_inventory <- cache_inventory[cache_names %chin% svy_in_pfw]
 
-cache_ids <- names(cache_dir)
+cache_ids <- get_cache_id(cache_inventory)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## notify that lenghts are different ---

@@ -127,7 +127,7 @@ db_compute_survey_mean_sac <- function(cache,
   # add_vars(dt_nat) <- dt_meta_vars|>
   #   fselect(-c(cache_id, reporting_level,area))
   
-  dt <- cache_sac |>
+  dt <- cache |>
     fsubset(distribution_type %in% c("imputed", "micro"))
   
   dt_c <- dt |>
@@ -549,7 +549,7 @@ db_dist_stats_sac <- function(cache,
   
   # 1. Select variables and subset for Micro data----
   
-  dt_m <- cache_sac |>
+  dt_m <- cache |>
     fselect(cache_id, distribution_type, cpi_data_level, ppp_data_level,
             gdp_data_level, pce_data_level,
             pop_data_level, reporting_level, 
@@ -637,7 +637,7 @@ db_dist_stats_sac <- function(cache,
   if(any(cache$distribution_type %in% c("group", "aggregate"))){
     
     # Select variables, subset and join mean table
-    dt_jn <- cache_sac |>
+    dt_jn <- cache |>
       fselect(cache_id, distribution_type, imputation_id, cpi_data_level, ppp_data_level,
               gdp_data_level, pce_data_level,
               pop_data_level, reporting_level, weight, welfare) |>
@@ -742,7 +742,7 @@ db_dist_stats_sac <- function(cache,
 db_create_dist_table_sac <- function(dt, dsm_table){
   
   dt_clean <- dt |>
-    collapse::join(mean_table|>
+    collapse::join(dsm_table|>
                      fselect("survey_id", "cache_id", "wb_region_code", "pcn_region_code",
                              "country_code", "surveyid_year", "survey_year",
                              "reporting_year", "survey_acronym", "welfare_type",

@@ -1,6 +1,6 @@
 # cache_sac used instead of cache, make sure you have cache_sac created first
 # This file creates "final" which is comparable to the TAR version.
-mean_table <- means_out_sac
+# mean_table <- means_out_sac
 
 # 1. Select variables and subset for Micro data----
 
@@ -9,16 +9,16 @@ dt_m <- cache_sac |>
           gdp_data_level, pce_data_level,
           pop_data_level, reporting_level, 
           imputation_id, area, weight, welfare_ppp) |>
-  fsubset(distribution_type %in% c("micro", "imputed")) 
+  fsubset(distribution_type %in% c("micro", "imputed")) # 2 minutes
 
 # 2. Micro and Imputed Data: Level & Area Estimation  ----
 # GC Note: Now this is not Level & Area estimation, it is just level estimation.
 
 md_level <- dt_m |>
-  fsubset(distribution_type %in% c("micro"))
-fselect(-c(distribution_type))|>
+  fsubset(distribution_type %in% c("micro")) |>
+  fselect(-c(distribution_type))|>
   roworder(cache_id, imputation_id, pop_data_level, welfare_ppp) |>
-  collapse::join(mean_table |> 
+  collapse::join(means_out_sac |> 
                    # GC Note: Added variables here and also joined by additional variables:
                    fselect(cache_id, cpi_data_level, ppp_data_level,
                            gdp_data_level, pce_data_level,
@@ -41,11 +41,11 @@ fselect(-c(distribution_type))|>
   fungroup()|>
   frename(survey_median_ppp = median)|>
   fmutate(reporting_level = as.character(reporting_level),
-          pop_data_level = as.character(pop_data_level))
+          pop_data_level = as.character(pop_data_level)) # 11:40 -> 11:43 3 minutes
 
 id_level <- dt_m |>
-  fsubset(distribution_type %in% c("imputed"))
-fselect(-c(distribution_type))|>
+  fsubset(distribution_type %in% c("imputed")) |>
+  fselect(-c(distribution_type))|>
   _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                 weight  = weight,
                                 mean = NULL)),
@@ -63,13 +63,12 @@ fselect(-c(distribution_type))|>
   fungroup()|>
   frename(survey_median_ppp = median)|>
   fmutate(reporting_level = as.character(reporting_level),
-          pop_data_level = as.character(pop_data_level))
+          pop_data_level = as.character(pop_data_level)) # 11:43 -> 11:45 2 minutes
 
 # 3. Micro and Imputed Data: National Estimation ----
 
 md_id_national <- dt_m |>
-  # fsubset(reporting_level == 'national' & area != "national") |>
-  # this is equivalent to having pop_data_level > 2
+  # this is equivalent to having pop_data_level > 1 and D2:
   fsubset(reporting_level != 'national' & ppp_data_level != 'national') |> # here is the mistake!
   fselect(-c(distribution_type))|>
   roworder(cache_id, imputation_id, welfare_ppp)|>
@@ -98,7 +97,7 @@ dt_jn <- cache_sac |>
           gdp_data_level, pce_data_level,
           pop_data_level, reporting_level, weight, welfare) |>
   fsubset(distribution_type %in% c("group", "aggregate"))|>
-  collapse::join(mean_table |> 
+  collapse::join(means_out_sac |> 
                    # GC Note: Added variables here and also joined by additional variables:
                    fselect(cache_id, cpi_data_level, ppp_data_level,
                            gdp_data_level, pce_data_level,
@@ -187,7 +186,7 @@ ag_national <- ag_syn |>
 
 # Comparison ----
 
-final <- rowbind(md_level, id_level, md_id_national, gd_ag_area, ag_national)
+final <- rowbind(md_level |> fselect(-imputation_id), id_level, md_id_national, gd_ag_area, ag_national)
 
 # Create quick comparison with dist_out_tar
 compare_dist_sac <- final |> fselect(-c(cpi_data_level, ppp_data_level, gdp_data_level, pce_data_level))
@@ -198,7 +197,7 @@ compare_dist_tar <- dist_out_tar |> fselect(colnames(compare_dist_sac))
 setorder(compare_dist_tar, cache_id, reporting_level)
 compare_dist_tar <- as.data.table(lapply(compare_dist_tar, function(x) { attributes(x) <- NULL; return(x) }))
 
-waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-4) # All match
+waldo::compare(compare_dist_tar, compare_dist_sac, tolerance = 1e-7) # All match
 waldo::compare(compare_dist_tar |> fselect(-c(polarization, mld)), 
                compare_dist_sac |> fselect(-c(polarization, mld)), tolerance = 1e-7) # polarization and mld (only) do not match here
 

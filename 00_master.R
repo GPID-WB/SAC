@@ -57,6 +57,7 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Sys.setenv(PIP_ROOT_DIR = "//w1wbgencifs01/pip/")
+
 base_dir |>
   fs::path("_common.R") |>
   source(echo = FALSE)
@@ -110,6 +111,7 @@ source("Functions_SAC.R")
 
 cache_sac <- get_cache(cache_tb)
 rm(cache_tb)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -324,13 +326,13 @@ Prod_svy_estimation_tar <- db_create_svy_estimation_table(dsm_table = means_out_
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Filter without new area-level calculations
-to_compare <- Prod_svy_estimation_sac[
-  Prod_svy_estimation_sac$area == "national" | 
-    Prod_svy_estimation_sac$reporting_level == Prod_svy_estimation_sac$area,
-  -c("area")]
+# to_compare <- Prod_svy_estimation_sac[
+#   Prod_svy_estimation_sac$area == "national" | 
+#     Prod_svy_estimation_sac$reporting_level == Prod_svy_estimation_sac$area,
+#   -c("area")]
 
 # Eliminate attributes 
-to_compare <- as.data.table(lapply(to_compare, function(x) { attributes(x) <- NULL; return(x) }))
+to_compare <- as.data.table(lapply(Prod_svy_estimation_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Set similar keys
 setkey(Prod_svy_estimation_tar, "country_code")

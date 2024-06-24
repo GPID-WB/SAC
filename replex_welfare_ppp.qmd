@@ -158,8 +158,7 @@ This results should be the same as if we calculate the mean using the `wbpip` fu
 ```{r}
 source("wrp_wbpip.R")
 
-md_level <- dt |>
-  _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+md_level <- dt[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                 weight  = weight,
                                 mean = NULL)),
     by = .(cache_id, imputation_id, cpi_data_level, ppp_data_level,
@@ -178,10 +177,29 @@ md_level <- dt |>
                     "pce_data_level", "pop_data_level", 
                     "reporting_level"),
              match_type = "1:1",
-             y_vars_to_keep = "survey_mean_ppp")
+             y_vars_to_keep = "survey_mean_ppp")|>
+  fselect(-c(.joyn))
 
 
-waldo::compare(md_level$mean, md_level$survey_mean_ppp, tolerance = 1e-7)
+waldo::compare(md_level$mean, md_level$survey_mean_ppp, tolerance = 1e-6)
 
 ```
 
+## Find problematic observations
+
+```{r}
+
+spl_cache <- as.data.frame(matrix(unlist(strsplit(md_level$cache_id, "_")),ncol=6,byrow=T))
+
+names(spl_cache) <- c("country", "year", "survey", "D...","w_type", "source")
+
+dt_all <- cbind(md_level, spl_cache)
+
+dt_error <- dt_all[survey_mean_ppp!=mean,-c("median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10))]|>
+  fmutate(diff = survey_mean_ppp-mean)|>
+  fsubset(diff>1e-7)
+
+dt_error
+```

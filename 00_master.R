@@ -106,6 +106,19 @@ cache_tb <- rowbind(cache_ls, fill = TRUE)
 source("Functions_SAC.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Cache missing area   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+svy_miss <- cache_tb |>
+  fsubset(area=="")|>
+  funique(cols = .c(cache_id))|>
+  fselect(cache_id, country_code, survey_year)
+
+co_miss <- svy_miss|>
+  funique(cols = .c(country_code))|>
+  fselect(country_code)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 0. Create cache for SAC  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

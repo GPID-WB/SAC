@@ -177,7 +177,7 @@ md_level <- dt[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                     "pce_data_level", "pop_data_level", 
                     "reporting_level"),
              match_type = "1:1",
-             y_vars_to_keep = "survey_mean_ppp")|>
+             y_vars_to_keep = c("survey_mean_ppp", "ppp","cpi"))|>
   fselect(-c(.joyn))
 
 
@@ -202,4 +202,68 @@ dt_error <- dt_all[survey_mean_ppp!=mean,-c("median","gini",
   fsubset(diff>1e-7)
 
 dt_error
+```
+
+## Test hypothesis
+
+1. The mismatch might be related to the unique values of $cpi$ and $ppp$ (Its not!).
+
+```{r}
+
+data_idn <- cache_tb|>
+  fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
+  fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
+            surveyid_year, survey_acronym, survey_year, welfare_type,
+            distribution_type, gd_type, imputation_id, cpi_data_level, 
+            ppp_data_level, gdp_data_level, pce_data_level, 
+            pop_data_level, reporting_level)|>
+  joyn::joyn(dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1"
+  )|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  joyn::joyn(dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1"
+  )|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)
+
+dist_obs <- data_idn |>
+  fgroup_by(cache_id, cpi_data_level,ppp_data_level, 
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  fselect(welfare, welfare_ppp, weight, cpi, ppp)|>
+  fndistinct()
+
+```
+
+2. The `welfare_ppp` vector can be different than `welfare_ppp/ppp/cpi` (yes, it is!)
+
+```{r}
+
+dt_tst <- data_idn|>
+  fmutate(new_welf_ppp = welfare/ppp/cpi)
+
+# |>
+#   fmutate(diff = welfare_ppp-new_welf_ppp)|>
+#   fsubset(diff>1e-7)
+# 
+# dt_tst
+
+waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
+
 ```

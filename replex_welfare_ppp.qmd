@@ -77,7 +77,7 @@ add_vars(dt_c) <- dt_meta_vars|>
 rm(dt_meta_vars)
 ```
 
-Second, we merge ppp and cpi tables and calculate the PPP mean:
+Second, we merge $ppp$ and $cpi$ tables and calculate the PPP mean:
 
 ```{r}
 
@@ -249,6 +249,7 @@ dist_obs <- data_idn |>
   fselect(welfare, welfare_ppp, weight, cpi, ppp)|>
   fndistinct()
 
+dist_obs
 ```
 
 2. The `welfare_ppp` vector can be different than `welfare_ppp/ppp/cpi` (yes, it is!)
@@ -257,12 +258,6 @@ dist_obs <- data_idn |>
 
 dt_tst <- data_idn|>
   fmutate(new_welf_ppp = welfare/ppp/cpi)
-
-# |>
-#   fmutate(diff = welfare_ppp-new_welf_ppp)|>
-#   fsubset(diff>1e-7)
-# 
-# dt_tst
 
 waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
 

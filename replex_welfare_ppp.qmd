@@ -212,7 +212,7 @@ dt_error
 
 data_idn <- cache_tb|>
   fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
-  fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
+  fselect(welfare, welfare_ppp, welfare_lcu,weight, survey_id, cache_id, country_code, 
             surveyid_year, survey_acronym, survey_year, welfare_type,
             distribution_type, gd_type, imputation_id, cpi_data_level, 
             ppp_data_level, gdp_data_level, pce_data_level, 
@@ -246,7 +246,7 @@ dist_obs <- data_idn |>
   fgroup_by(cache_id, cpi_data_level,ppp_data_level, 
             gdp_data_level, pce_data_level,
             pop_data_level, reporting_level)|>
-  fselect(welfare, welfare_ppp, weight, cpi, ppp)|>
+  fselect(welfare_lcu, welfare, welfare_ppp, weight, cpi, ppp)|>
   fndistinct()
 
 dist_obs
@@ -257,7 +257,7 @@ dist_obs
 ```{r}
 
 dt_tst <- data_idn|>
-  fmutate(new_welf_ppp = welfare/ppp/cpi)
+  fmutate(new_welf_ppp = welfare_lcu/ppp/cpi)
 
 waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
 

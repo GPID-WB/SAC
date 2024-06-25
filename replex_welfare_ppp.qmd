@@ -264,7 +264,7 @@ waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
 
 ```
 
-3.  Check if it works using the new `welfare_ppp` vector.
+Check if it works using the new `welfare_ppp` vector.
 
 ```{r}
 
@@ -294,4 +294,96 @@ md_level_idn <- dt_tst[, as.list(wrp_md_dist_stats(welfare = new_welf_ppp,
 
 waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
 
+```
+
+3. Test if we need to round out `survey_year`
+
+```{r}
+
+data_idn <- cache_tb|>
+  fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
+  fselect(welfare, welfare_ppp, welfare_lcu,
+          weight, survey_id, cache_id, country_code, 
+          surveyid_year, survey_acronym, survey_year, welfare_type,
+          distribution_type, gd_type, imputation_id, cpi_data_level, 
+          ppp_data_level, gdp_data_level, pce_data_level, 
+          pop_data_level, reporting_level)|>
+  ftransform(survey_year = round(survey_year, 2))
+
+dt_f <- data_idn |>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level, 
+            imputation_id)|> 
+  collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  fungroup()
+
+md_level_idn <- data_idn[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level,imputation_id)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()
+
+dt_meta_vars <- dt |>
+  fsubset(country_code == "IDN")|>
+  get_vars(metadata_vars) |> 
+  funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
+                   "gdp_data_level", "pce_data_level",
+                   "pop_data_level", "reporting_level")) 
+
+add_vars(md_level_idn) <- dt_meta_vars|>
+  fselect(-c(cache_id, cpi_data_level, ppp_data_level,
+             gdp_data_level, pce_data_level,
+             pop_data_level, reporting_level))
+
+md_level_idn <- md_level_idn|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_lcu"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-c(.joyn))|>
+  joyn::joyn(dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1",
+             y_vars_to_keep = c("cpi"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  joyn::joyn(dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1",
+             y_vars_to_keep = c("ppp"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+
+
+waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
 ```

@@ -15,18 +15,17 @@ execute:
 
 $$[\frac{\sum{x*w}}{N}]/ppp/cpi == \frac{\sum{(x/ppp/cpi)*w}}{N}$$
 
-
 where $x$ is welfare, $w$ is weights, $N$ is number of observations and $ppp$ and $cpi$ are unique per survey.
 
-::: {.callout-note}
-Load `cache_tb` from master 
+::: callout-note
+Load `cache_tb` from master
 :::
 
 ## Error
 
 **Objective**: We show how the identity does not hold using our code.
 
-First, we calculate the mean of welfare ($\frac{\sum{x*w}}{N}$): 
+First, we calculate the mean of welfare ($\frac{\sum{x*w}}{N}$):
 
 ```{r}
 #| echo: true
@@ -34,6 +33,8 @@ First, we calculate the mean of welfare ($\frac{\sum{x*w}}{N}$):
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Generate means separately   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+rm(cache_ls)
 
 dt <- cache_tb |>
   fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
@@ -206,7 +207,7 @@ dt_error
 
 ## Test hypothesis
 
-1. The mismatch might be related to the unique values of $cpi$ and $ppp$ (Its not!).
+1.  The mismatch might be related to the unique values of $cpi$ and $ppp$ (Its not!).
 
 ```{r}
 
@@ -252,7 +253,7 @@ dist_obs <- data_idn |>
 dist_obs
 ```
 
-2. The `welfare_ppp` vector can be different than `welfare_ppp/ppp/cpi` (yes, it is!)
+2.  The `welfare_ppp` vector can be different than `welfare_ppp/ppp/cpi` (yes, it is!)
 
 ```{r}
 
@@ -260,5 +261,37 @@ dt_tst <- data_idn|>
   fmutate(new_welf_ppp = welfare_lcu/ppp/cpi)
 
 waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
+
+```
+
+3.  Check if it works using the new `welfare_ppp` vector.
+
+```{r}
+
+md_level_idn <- dt_tst[, as.list(wrp_md_dist_stats(welfare = new_welf_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level,imputation_id)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_ppp", "ppp","cpi"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-c(.joyn))
+
+
+waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
 
 ```

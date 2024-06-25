@@ -686,13 +686,13 @@ db_dist_stats_sac <- function(cache,
     
     # 5. Row bind and return ----
     
-    final <- rowbind(md_level, id_level, md_id_national, gd_ag_level, ag_national)
+    final <- rowbind(md_id_level, md_id_national, gd_ag_level, ag_national)
     
     return(final)
     
   }
   
-  final <- rowbind(md_level, id_level, md_id_national)
+  final <- rowbind(md_id_level, md_id_national)
   
   return(final)
   

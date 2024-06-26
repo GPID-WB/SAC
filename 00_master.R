@@ -287,7 +287,8 @@ Dist_stats_tar <- function(cache,
 
 # Load output:
 dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
-                               dsm_table = means_out_sac)
+                               dsm_table = means_out_sac,
+                               cache_inventory = cache_inventory)
 
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,
                                dsm_table = means_out_tar, 

@@ -504,8 +504,6 @@ db_dist_stats_sac <- function(cache,
   # 2. Micro Data: Level Estimation  ----
   
   md_id_level <- dt_m |>
-    fsubset(distribution_type %in% c("micro")) |>
-    fselect(-c(distribution_type))|>
     roworder(cache_id, pop_data_level, welfare_ppp) |>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                   weight  = weight,
@@ -532,7 +530,6 @@ db_dist_stats_sac <- function(cache,
   md_id_national <- dt_m |>
     # Gc Note: this is equivalent to having pop_data_level > 1 and D2 in cache_id:
     fsubset(reporting_level != 'national' & ppp_data_level != 'national') |>
-    fselect(-c(distribution_type))|>
     roworder(cache_id, imputation_id, welfare_ppp)|>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp, weight = weight)),
       by = .(cache_id, imputation_id)]|>
@@ -577,7 +574,6 @@ db_dist_stats_sac <- function(cache,
     # 4. Group and Aggregate Data: Level and Area Estimation -----
     
     gd_ag_level <- dt_jn |>
-      fselect(-c(distribution_type, reporting_pop)) |>
       roworder(cache_id, cpi_data_level, ppp_data_level,
                gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
@@ -600,7 +596,6 @@ db_dist_stats_sac <- function(cache,
     
     ag_syn <- dt_jn |>
       fsubset(distribution_type %in% c("aggregate")) |>
-      fselect(-c(distribution_type))|>
       roworder(cache_id, cpi_data_level, ppp_data_level,
                gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
@@ -650,7 +645,7 @@ db_dist_stats_sac <- function(cache,
 ## and create median in LCU
 ## Note: This function is missing the warnings from the old pipeline/targets code
 
-db_create_dist_table_sac <- function(dt, dsm_table){
+db_create_dist_table_sac <- function(dt, dsm_table, cache_inventory){
   
   dt_clean <- dt |>
     collapse::join(dsm_table|>
@@ -662,14 +657,27 @@ db_create_dist_table_sac <- function(dt, dsm_table){
                    validate = "1:1",
                    how = "left",
                    verbose = 0,
-                   overid = 2)|>
+                   overid = 2)
+  
+  dt_clean[cache_inventory, 
+           # I think this is a patch but it does not check if We
+           # are using the last version of dataliweb.
+     on = "cache_id",
+     survey_id := i.survey_id
+  ]
+  
+  dt_clean <- dt_clean |>
     fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi,
             survey_id = toupper(survey_id))|>
     fselect(-ppp, -cpi)|>
     colorder(survey_id, cache_id, wb_region_code, pcn_region_code, country_code,
              survey_acronym, surveyid_year, survey_year, reporting_year, welfare_type,
              reporting_level, survey_median_lcu, survey_median_ppp, decile1:decile10,
-             mean, gini, polarization, mld, pop_data_level)
+             mean, gini, polarization, mld, pop_data_level)  
+  
+  # change factors to characters
+  dt_clean <- dt_clean |>
+    fcomputev(is.factor, as.character, keep = names(dt_clean))
   
   return(dt_clean)
 }

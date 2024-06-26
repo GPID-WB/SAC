@@ -335,7 +335,7 @@ cpi_same <- means_out_tar|>
                    ),
                    match_type = "1:1",
                    keep = "left",
-                   y_vars_to_keep = "survey_id")|>
+                   y_vars_to_keep = FALSE)|>
   fsubset(.joyn != "x" & (!is.na(cpi)|!is.na(ppp)))|>
   fselect(-.joyn)
   
@@ -345,9 +345,9 @@ compare_sac <- dist_out_sac|>
              ),
              match_type = "1:1",
              keep = "left",
-             y_vars_to_keep = "survey_id") |>
+             y_vars_to_keep = FALSE) |>
   fsubset(.joyn != "x")|>
-  fselect(-c(.joyn,  survey_id))
+  fselect(-c(.joyn))
 
 compare_tar <- dist_out_tar|>
   joyn::joyn(cpi_same,
@@ -355,9 +355,9 @@ compare_tar <- dist_out_tar|>
              ),
              match_type = "1:1",
              keep = "left",
-             y_vars_to_keep = "survey_id") |>
+             y_vars_to_keep = FALSE) |>
   fsubset(.joyn != "x")|>
-  fselect(-c(.joyn,  survey_id))
+  fselect(-c(.joyn))
 
 # Eliminate attributes 
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
@@ -375,6 +375,7 @@ all.equal(compare_tar,compare_sac)
 
 waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)
 
+rm(compare_sac,compare_tar)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. Prod_svy_estimation   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -420,4 +421,46 @@ all.equal(Prod_svy_estimation_tar,to_compare)
 
 waldo::compare(Prod_svy_estimation_tar,to_compare, tolerance = 1e-7)
 
+rm(to_compare)
 
+# Filter without the changes in ppp/cpi and survey_median_ppp
+
+compare_tar <- Prod_svy_estimation_tar|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x" & !is.na(survey_median_ppp))|>
+  fselect(-c(.joyn))
+
+compare_sac <- Prod_svy_estimation_sac|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x" )|>
+  fselect(-c(.joyn))|>
+  joyn::joyn(compare_tar,
+             by = c("cache_id", "pop_data_level", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn))
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)

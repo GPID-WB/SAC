@@ -240,7 +240,8 @@ rm(compare_sac,compare_tar)
 ## 3.1 SAC --------
 
 Dist_stats_sac <- function(cache, 
-                           dsm_table){
+                           dsm_table,
+                           cache_inventory){
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Calculate Distributional Statistics --------
@@ -252,7 +253,8 @@ Dist_stats_sac <- function(cache,
   ## Add/remove relevant variables --------
   
   dt_dist_stats_sac <- db_create_dist_table_sac(dt = db_dist_stats,
-                                                dsm_table = dsm_table)
+                                                dsm_table = dsm_table,
+                                                cache_inventory = cache_inventory)
   
   return(dt_dist_stats_sac)
 }
@@ -319,6 +321,59 @@ setkey(compare_sac, "country_code")
 all.equal(dist_out_tar,compare_sac)
 
 waldo::compare(dist_out_tar,compare_sac, tolerance = 1e-7)
+
+rm(compare_sac)
+
+# Filter without the changes in ppp/cpi
+cpi_same <- means_out_tar|>
+  joyn::joyn(means_out_sac,
+                   by = c("cache_id", 
+                          "cpi_data_level", 
+                          "ppp_data_level",
+                          "cpi",
+                          "ppp"
+                   ),
+                   match_type = "1:1",
+                   keep = "left",
+                   y_vars_to_keep = "survey_id")|>
+  fsubset(.joyn != "x" & (!is.na(cpi)|!is.na(ppp)))|>
+  fselect(-.joyn)
+  
+compare_sac <- dist_out_sac|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = "survey_id") |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn,  survey_id))
+
+compare_tar <- dist_out_tar|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = "survey_id") |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn,  survey_id))
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Order rows
+data.table::setorder(compare_sac, cache_id, reporting_level)
+data.table::setorder(compare_tar, cache_id, reporting_level)
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. Prod_svy_estimation   ---------

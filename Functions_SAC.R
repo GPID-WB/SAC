@@ -497,29 +497,14 @@ db_dist_stats_sac <- function(cache,
   dt_m <- cache |>
     fselect(cache_id, distribution_type, cpi_data_level, ppp_data_level,
             gdp_data_level, pce_data_level,
-            pop_data_level, reporting_level, 
+            pop_data_level, reporting_level,
             imputation_id, weight, welfare_ppp)|>
     fsubset(distribution_type %in% c("micro", "imputed"))
   
   # 2. Micro Data: Level Estimation  ----
   
-  md_level <- dt_m |>
-    fsubset(distribution_type %in% c("micro"))|>
+  md_id_level <- dt_m |>
     roworder(cache_id, pop_data_level, welfare_ppp) |>
-    _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
-                                  weight  = weight,
-                                  mean = NULL)),
-      by = .(cache_id, cpi_data_level, ppp_data_level,
-             gdp_data_level, pce_data_level,
-             pop_data_level, reporting_level)]|>
-    frename(survey_median_ppp = median)|>
-    fmutate(reporting_level = as.character(reporting_level),
-            pop_data_level = as.character(pop_data_level)) |>
-    fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level))
-  
-  id_level <- dt_m |>
-    fsubset(distribution_type %in% c("imputed")) |>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                   weight  = weight,
                                   mean = NULL)),
@@ -641,13 +626,13 @@ db_dist_stats_sac <- function(cache,
     
     # 5. Row bind and return ----
     
-    final <- rowbind(md_level, id_level, md_id_national, gd_ag_level, ag_national)
+    final <- rowbind(md_id_level, md_id_national, gd_ag_level, ag_national)
     
     return(final)
     
   }
-  
-  final <- rowbind(md_level, id_level, md_id_national)
+
+  final <- rowbind(md_id_level, md_id_national)
   
   return(final)
   

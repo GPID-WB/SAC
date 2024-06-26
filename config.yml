@@ -5,12 +5,16 @@ default:
 wb535623:
   my_pipe_path: "01.personal/wb535623/PIP/pip_ingestion_pipeline"
   my_cache_path: "01.personal/wb535623/PIP/Cache"
+  my_out_path: "01.personal/wb535623/PIP/temp"
   base_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
                     fs::path(s_path, my_pipe_path) 
                     else fs::path(l_path, my_pipe_path)
   cache_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
                     fs::path(s_path, my_cache_path) 
                     else fs::path(l_path, my_cache_path)
+  out_dir: !expr if (Sys.info()['nodename'] == "WBGMSDDG001") 
+                    fs::path(s_path, my_out_path) 
+                    else fs::path(l_path, my_out_path)
 
 wb622077:
   my_pipe_path: "01.personal/wb622077/pip_ingestion_pipeline"

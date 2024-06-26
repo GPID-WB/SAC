@@ -558,51 +558,16 @@ db_dist_stats_sac <- function(cache,
   
   # 2. Micro Data: Level Estimation  ----
   
-  md_level <- dt_m |>
+  md_id_level <- dt_m |>
     fsubset(distribution_type %in% c("micro")) |>
     fselect(-c(distribution_type))|>
     roworder(cache_id, pop_data_level, welfare_ppp) |>
-    collapse::join(mean_table |> 
-                     fselect(cache_id, cpi_data_level, ppp_data_level,
-                             gdp_data_level, pce_data_level,
-                             pop_data_level, reporting_level, 
-                             survey_mean_ppp, reporting_pop),
-                   on=c("cache_id", "cpi_data_level", "ppp_data_level",
-                        "gdp_data_level", "pce_data_level",
-                        "pop_data_level", "reporting_level"), 
-                   # GC Note: it is actually over-identified at this stage. 
-                   # Maybe we can exlpore whether this is really needed?
-                   validate = "m:1",
-                   verbose = 0,
-                   overid = 2,
-                   column = list(".joyn", c("x", "y", "x & y")))|>
-    _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
-                                  weight  = weight,
-                                  mean = funique(survey_mean_ppp))),
-      by = .(cache_id, cpi_data_level, ppp_data_level,
-             gdp_data_level, pce_data_level,
-             pop_data_level, reporting_level)]|>
-    fungroup()|>
-    frename(survey_median_ppp = median)|>
-    fmutate(reporting_level = as.character(reporting_level),
-            pop_data_level = as.character(pop_data_level)) |>
-    fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level)) # 3 minutes
-  
-  
-  # 3. Imputed Data: Level Estimation  ----
-  
-  id_level <- dt_m |>
-    fsubset(distribution_type %in% c("imputed")) |>
-    fselect(-c(distribution_type))|>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                   weight  = weight,
                                   mean = NULL)),
-      # Note: Here we remove area from the grouping too, and we add the other levels:
       by = .(cache_id, imputation_id, cpi_data_level, ppp_data_level,
              gdp_data_level, pce_data_level,
              pop_data_level, reporting_level)]|>
-    # Note: and here again, area out, other levels in:
     fgroup_by(cache_id, cpi_data_level, ppp_data_level,
               gdp_data_level, pce_data_level,
               pop_data_level, reporting_level)|>
@@ -614,9 +579,10 @@ db_dist_stats_sac <- function(cache,
     fmutate(reporting_level = as.character(reporting_level),
             pop_data_level = as.character(pop_data_level))|>
     fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level)) # < 1 minute
+               gdp_data_level, pce_data_level))
   
-  # 4. Micro and Imputed Data: National Estimation ----
+  
+  # 3. Micro and Imputed Data: National Estimation ----
   
   md_id_national <- dt_m |>
     # Gc Note: this is equivalent to having pop_data_level > 1 and D2 in cache_id:
@@ -685,7 +651,7 @@ db_dist_stats_sac <- function(cache,
     
     setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_level)))
     
-    # 5. Aggregate Data: National estimation (synth needed) ----
+    # 4. Aggregate Data: National estimation (synth needed) ----
     
     ag_syn <- dt_jn |>
       fsubset(distribution_type %in% c("aggregate")) |>
@@ -718,15 +684,15 @@ db_dist_stats_sac <- function(cache,
       fmutate(reporting_level = as.character("national"),
               pop_data_level = as.character("national")) # immediate
     
-    # 6. Row bind and return ----
+    # 5. Row bind and return ----
     
-    final <- rowbind(md_level, id_level, md_id_national, gd_ag_level, ag_national)
+    final <- rowbind(md_id_level, md_id_national, gd_ag_level, ag_national)
     
     return(final)
     
   }
   
-  final <- rowbind(md_level, id_level, md_id_national)
+  final <- rowbind(md_id_level, md_id_national)
   
   return(final)
   

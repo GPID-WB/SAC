@@ -144,11 +144,10 @@ Means_pipeline_sac <- function(cache_inventory,
                                                     pfw_table = dl_aux$pfw)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ## Means in PPP --------
+  ## Means in PPP and other changes --------
   
-  svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
-                                                    cpi_table = dl_aux$cpi,
-                                                    ppp_table = dl_aux$ppp)
+  svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac)
+  
   return(svy_mean_ppp_table_sac)
 }
 
@@ -211,6 +210,28 @@ all.equal(means_out_tar,compare_sac)
 waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 
 rm(compare_sac)
+
+# Filter without survey_mean_ppp, cpi and ppp
+compare_sac <- means_out_sac[, -c("survey_mean_ppp","ppp","cpi")]
+compare_tar <- means_out_tar[, -c("survey_mean_ppp","ppp","cpi")]
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Order rows
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
+data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+
+# Order columns
+compare_sac <- compare_sac[, colnames(compare_tar), with = FALSE]
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)
+
+rm(compare_sac,compare_tar)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Dist Stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

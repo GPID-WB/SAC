@@ -17,12 +17,13 @@ get_cache <- function(cache) {
             surveyid_year, survey_acronym, survey_year, welfare_type,
             distribution_type, gd_type, imputation_id, cpi_data_level, 
             ppp_data_level, gdp_data_level, pce_data_level, 
-            pop_data_level, reporting_level, area)|>
-    ftransform(area = as.character(area))
+            pop_data_level, reporting_level, 
+            #area,
+            cpi, ppp)
+  # |>
+  #   ftransform(area = as.character(area))
   
-  #dt[dt$area=="","area"] <- "national" 
-  
-  setv(dt$area,"", "national") # Faster than ifelse or data.table above
+  # setv(dt$area,"", "national") 
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
@@ -80,12 +81,14 @@ db_compute_survey_mean_sac <- function(cache,
   # ------ Prepare data -----
   
   # Select variables for metadata
-  metadata_vars <- c("cache_id", "reporting_level", "area",
+  metadata_vars <- c("cache_id", "reporting_level", 
+                     #"area",
                      "survey_id", "country_code", "surveyid_year", 
                      "survey_acronym","survey_year", "welfare_type", 
                      "distribution_type","gd_type","cpi_data_level",
                      "ppp_data_level", "gdp_data_level", 
-                     "pce_data_level", "pop_data_level")
+                     "pce_data_level", "pop_data_level",
+                     "cpi", "ppp")
   
   # ------ Micro data urban/rural -----
   
@@ -185,8 +188,8 @@ db_compute_survey_mean_sac <- function(cache,
                  "surveyid_year", 
                  "survey_acronym",
                  "survey_year", 
-                 "welfare_type",
-                 "area")
+                 "welfare_type")
+                 #"area")
   
   setorderv(dt_c, sort_vars) # Order rows
   
@@ -354,72 +357,14 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 1.4 svy_mean_ppp_table --------
 ##
-## Objective: Deflated survey mean (DSM) table (merge with CPI and PPP table)
+## Objective: Deflated survey mean (DSM) table, add other 
+## logical variables, and calculate aggregated means
 
-db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
-  
-  
-  #--------- Merge with CPI ---------
-  
-  # Merge survey table with CPI (left join)
-  dt <- joyn::joyn(lcu_table, cpi_table|> 
-                     fselect(country_code, 
-                             survey_year, 
-                             survey_acronym,
-                             cpi_data_level, 
-                             cpi),
-                   by = c(
-                     "country_code", "survey_year",
-                     "survey_acronym", "cpi_data_level"
-                   ),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure CPI table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  dt <- dt|>
-    fsubset(.joyn != "y")|>
-    fselect(-.joyn)
-  
-  #--------- Merge with PPP ---------
-  
-  # Merge survey table with PPP (left join)
-  dt <- joyn::joyn(dt, ppp_table|>
-                     fsubset(ppp_default == TRUE)|> # Select default PPP values
-                     fselect(country_code,
-                             ppp_data_level,
-                             ppp),
-                   by = c("country_code", "ppp_data_level"),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure PPP table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  dt <- dt |>
-    fsubset(.joyn != "y")|>
-    fselect(-.joyn)
+db_create_dsm_table_sac <- function(lcu_table) {
   
   #--------- Deflate welfare mean ---------
   
-  dt <- fmutate(dt, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+  dt <- fmutate(lcu_table, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
   
   #--------- Add comparable spell --------- ## 
   

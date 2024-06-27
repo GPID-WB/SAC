@@ -100,7 +100,7 @@ base_dir |>
 # source("PFW_fix.R") 
 # 
 # In dt format:
-cache_sac <- rowbind(cache, fill = TRUE)
+# cache_tb <- rowbind(cache, fill = TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
@@ -114,7 +114,7 @@ source("Functions_SAC.R")
 # 0. Create cache for SAC  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-cache_sac <- get_cache(cache_sac)
+cache_sac <- get_cache(cache)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
@@ -137,7 +137,7 @@ Means_pipeline_sac <- function(cache_inventory,
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Means in LCU --------
   
-  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, 
+  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_sac, 
                                                  gd_mean = gd_means_sac)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -165,7 +165,7 @@ Means_pipeline_tar <- function(cache_inventory,
   gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
                                       gdm = dl_aux$gdm)
   
-  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, 
+  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache,  
                                       gd_means_tar) 
   
   svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,

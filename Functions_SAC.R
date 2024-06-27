@@ -11,8 +11,43 @@ get_cache <- function(cache) {
   # computations   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
+  # Unlist in two lists
+  
+  # #This version takes too long
+  # 
+  # cache_sac_mi <-data.frame()
+  # cache_sac_ga <-data.frame()
+  #   
+  # for(i in 1:2388){
+  #   
+  #   dist_type <- as.character(funique(cache[[i]]$distribution_type))
+  #   
+  #   if(is_empty(dist_type)){
+  #     
+  #     print(i)
+  # 
+  #   }else{
+  #     
+  #     if (dist_type %in% c("micro","imputed")){
+  #       
+  #       cache_sac_mi <- rowbind(cache_sac_mi,cache[[i]], fill =TRUE)
+  #       print(paste(dist_type,": ",i))
+  # 
+  #     } else if(dist_type %in% c("group","aggregate")){
+  #       
+  #       cache_sac_ga <- rowbind(cache_sac_ga, cache[[i]], fill=TRUE)
+  #       print(paste(dist_type,": ",i))
+  # 
+  #     }
+  #   }
+  # 
+  # }
+  # 
+  
+  cache_tb <- rowbind(cache, fill = TRUE)
+  
   # Select variables and modify the area variable for imputed or group
-  dt <- cache |>
+  cache_tb <- cache_tb |>
     fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
             surveyid_year, survey_acronym, survey_year, welfare_type,
             distribution_type, gd_type, imputation_id, cpi_data_level, 
@@ -23,12 +58,21 @@ get_cache <- function(cache) {
   # |>
   #   ftransform(area = as.character(area))
   
-  # setv(dt$area,"", "national") 
+  # setv(dt$area,"", "national")
+  
+  dt_ls <- list()
+  dt_ls[["micro_imputed"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("micro","imputed"))
+  
+  dt_ls[["group_aggregate"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("group","aggregate"))
+  
+  rm(cache_tb)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  return(dt)
+  return(dt_ls)
   
 }
 
@@ -130,8 +174,10 @@ db_compute_survey_mean_sac <- function(cache,
   # add_vars(dt_nat) <- dt_meta_vars|>
   #   fselect(-c(cache_id, reporting_level,area))
   
-  dt <- cache |>
-    fsubset(distribution_type %in% c("imputed", "micro"))
+  # dt <- cache |>
+  #   fsubset(distribution_type %in% c("imputed", "micro"))
+  
+  dt <- cache[["micro_imputed"]] 
   
   dt_c <- dt |>
     fgroup_by(cache_id, cpi_data_level, ppp_data_level,
@@ -162,10 +208,12 @@ db_compute_survey_mean_sac <- function(cache,
   
   #  ------ Group data -----
   
-  if(any(cache$distribution_type %in% c("group", "aggregate"))){
+  if(nrow(cache[["group_aggregate"]])!=0){
+  #if(any(cache$distribution_type %in% c("group", "aggregate"))){
     
-    dt_g <- cache |>
-      fsubset(distribution_type %in% c("group", "aggregate"))|>
+    dt_g <- cache[["group_aggregate"]]|>
+    # dt_g <- cache |>
+    #   fsubset(distribution_type %in% c("group", "aggregate"))|>
       fselect(-c(welfare, imputation_id)) |> 
       fgroup_by(metadata_vars)|>
       collapg(custom = list(fsum = "weight"))|>

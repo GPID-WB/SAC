@@ -1,0 +1,496 @@
+---
+title: "Replex: Mean Welfare PPP"
+format: 
+  html:
+    code-fold: true
+execute:
+  cache: true
+---
+
+## Issue to solve
+
+**Problem:** When we calculate the welfare mean separately than through the `wbpip` function leads to different survey distributional estimations.
+
+**Assumption**: The following identity should work:
+
+$$[\frac{\sum{x*w}}{N}]/ppp/cpi == \frac{\sum{(x/ppp/cpi)*w}}{N}$$
+
+where $x$ is welfare, $w$ is weights, $N$ is number of observations and $ppp$ and $cpi$ are unique per survey.
+
+::: callout-note
+Load `cache_tb` from master
+:::
+
+## Error
+
+**Objective**: We show how the identity does not hold using our code.
+
+First, we calculate the mean of welfare ($\frac{\sum{x*w}}{N}$):
+
+```{r}
+#| echo: true
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Generate means separately   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+rm(cache_ls)
+
+dt <- cache_tb |>
+  fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
+            surveyid_year, survey_acronym, survey_year, welfare_type,
+            distribution_type, gd_type, imputation_id, cpi_data_level, 
+            ppp_data_level, gdp_data_level, pce_data_level, 
+            pop_data_level, reporting_level, area)|>
+  fsubset(distribution_type %in% c("imputed", "micro"))
+
+dt_c <- dt |>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level, 
+            imputation_id)|> 
+  collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  fungroup()
+
+# Select variables for metadata
+metadata_vars <- c("cache_id", "reporting_level", "area",
+                   "survey_id", "country_code", "surveyid_year", 
+                   "survey_acronym","survey_year", "welfare_type", 
+                   "distribution_type","gd_type","cpi_data_level",
+                   "ppp_data_level", "gdp_data_level", 
+                   "pce_data_level", "pop_data_level")
+
+dt_meta_vars <- dt |>
+  get_vars(metadata_vars) |> 
+  funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
+                   "gdp_data_level", "pce_data_level",
+                   "pop_data_level", "reporting_level")) 
+
+add_vars(dt_c) <- dt_meta_vars|>
+  fselect(-c(cache_id, cpi_data_level, ppp_data_level,
+             gdp_data_level, pce_data_level,
+             pop_data_level, reporting_level))
+
+rm(dt_meta_vars)
+```
+
+Second, we merge $ppp$ and $cpi$ tables and calculate the PPP mean:
+
+```{r}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Join ppp and cpi   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  #--------- Merge with CPI ---------
+  
+  # Merge survey table with CPI (left join)
+  dt_j <- joyn::joyn(dt_c, dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1"
+  )
+  
+  if (nrow(dt_j[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure CPI table is up to date"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_j <- dt_j|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
+  
+  #--------- Merge with PPP ---------
+  
+  # Merge survey table with PPP (left join)
+  dt_j <- joyn::joyn(dt_j, dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1"
+  )
+  
+  if (nrow(dt_j[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure PPP table is up to date"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_j <- dt_j |>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Calculate mean_ppp   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+dt_f <- fmutate(dt_j, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+
+rm(dt_c, dt_j)
+
+```
+
+This results should be the same as if we calculate the mean using the `wbpip` function over `welfare_ppp`:
+
+```{r}
+source("wrp_wbpip.R")
+
+md_level <- dt[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, imputation_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_ppp", "ppp","cpi"))|>
+  fselect(-c(.joyn))
+
+
+waldo::compare(md_level$mean, md_level$survey_mean_ppp, tolerance = 1e-6)
+
+```
+
+## Find problematic observations
+
+```{r}
+
+spl_cache <- as.data.frame(matrix(unlist(strsplit(md_level$cache_id, "_")),ncol=6,byrow=T))
+
+names(spl_cache) <- c("country", "year", "survey", "D...","w_type", "source")
+
+dt_all <- cbind(md_level, spl_cache)
+
+dt_error <- dt_all[survey_mean_ppp!=mean,-c("median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10))]|>
+  fmutate(diff = survey_mean_ppp-mean)|>
+  fsubset(diff>1e-7)
+
+dt_error
+```
+
+## Test hypothesis
+
+1.  The mismatch might be related to the unique values of $cpi$ and $ppp$ (Its not!).
+
+```{r}
+
+data_idn <- cache_tb|>
+  fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
+  fselect(welfare, welfare_ppp, welfare_lcu,weight, survey_id, cache_id, country_code, 
+            surveyid_year, survey_acronym, survey_year, welfare_type,
+            distribution_type, gd_type, imputation_id, cpi_data_level, 
+            ppp_data_level, gdp_data_level, pce_data_level, 
+            pop_data_level, reporting_level)|>
+  joyn::joyn(dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1"
+  )|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  joyn::joyn(dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1"
+  )|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)
+
+dist_obs <- data_idn |>
+  fgroup_by(cache_id, cpi_data_level,ppp_data_level, 
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  fselect(welfare_lcu, welfare, welfare_ppp, weight, cpi, ppp)|>
+  fndistinct()
+
+dist_obs
+```
+
+2.  The `welfare_ppp` vector can be different than `welfare_ppp/ppp/cpi` (yes, it is!)
+
+```{r}
+
+dt_tst <- data_idn|>
+  fmutate(new_welf_ppp = welfare_lcu/ppp/cpi)
+
+waldo::compare(dt_tst$welfare_ppp, dt_tst$new_welf_ppp)
+
+```
+
+Check if it works using the new `welfare_ppp` vector.
+
+```{r}
+
+md_level_idn <- dt_tst[, as.list(wrp_md_dist_stats(welfare = new_welf_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level,imputation_id)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_ppp", "ppp","cpi"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-c(.joyn))
+
+
+waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
+
+```
+
+3. Test if we need to round out `survey_year`
+
+```{r}
+
+data_idn <- cache_tb|>
+  fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
+  fselect(welfare, welfare_ppp, welfare_lcu,
+          weight, survey_id, cache_id, country_code, 
+          surveyid_year, survey_acronym, survey_year, welfare_type,
+          distribution_type, gd_type, imputation_id, cpi_data_level, 
+          ppp_data_level, gdp_data_level, pce_data_level, 
+          pop_data_level, reporting_level)|>
+  ftransform(survey_year = round(survey_year, 2))
+
+dt_f <- data_idn |>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level, 
+            imputation_id)|> 
+  collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  fungroup()
+
+md_level_idn <- data_idn[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level,imputation_id)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()
+
+dt_meta_vars <- dt |>
+  fsubset(country_code == "IDN")|>
+  get_vars(metadata_vars) |> 
+  funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
+                   "gdp_data_level", "pce_data_level",
+                   "pop_data_level", "reporting_level")) 
+
+add_vars(md_level_idn) <- dt_meta_vars|>
+  fselect(-c(cache_id, cpi_data_level, ppp_data_level,
+             gdp_data_level, pce_data_level,
+             pop_data_level, reporting_level))
+
+md_level_idn <- md_level_idn|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_lcu"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-c(.joyn))|>
+  joyn::joyn(dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1",
+             y_vars_to_keep = c("cpi"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  joyn::joyn(dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1",
+             y_vars_to_keep = c("ppp"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+
+
+waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
+```
+
+
+4. Test if using the `cpi` and `ppp` from cache works (success!)
+
+
+```{r}
+data_idn <- cache_tb|>
+  fsubset(country_code == "IDN" & distribution_type %in% c("imputed", "micro"))|>
+  fselect(welfare, welfare_ppp, welfare_lcu, cpi, ppp,
+          weight, survey_id, cache_id, country_code, 
+          surveyid_year, survey_acronym, survey_year, welfare_type,
+          distribution_type, gd_type, imputation_id, cpi_data_level, 
+          ppp_data_level, gdp_data_level, pce_data_level, 
+          pop_data_level, reporting_level)
+
+dt_f <- data_idn |>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level, 
+            imputation_id)|> 
+  collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+  fungroup()
+
+md_level_idn <- data_idn[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
+                                weight  = weight,
+                                mean = NULL)),
+    by = .(cache_id, cpi_data_level, ppp_data_level,
+           gdp_data_level, pce_data_level,
+           pop_data_level, reporting_level,imputation_id)]|>
+  fgroup_by(cache_id, cpi_data_level, ppp_data_level,
+            gdp_data_level, pce_data_level,
+            pop_data_level, reporting_level)|>
+  collapg(fmean, cols = c("mean","median","gini",
+                          "polarization","mld",
+                          paste0("decile",1:10)))|>
+  fungroup()
+
+metadata_vars <- c("cache_id", "reporting_level", "cpi","ppp",
+                   "survey_id", "country_code", "surveyid_year", 
+                   "survey_acronym","survey_year", "welfare_type", 
+                   "distribution_type","gd_type","cpi_data_level",
+                   "ppp_data_level", "gdp_data_level", 
+                   "pce_data_level", "pop_data_level")
+
+dt_meta_vars <- data_idn |>
+  get_vars(metadata_vars) |> 
+  funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
+                   "gdp_data_level", "pce_data_level",
+                   "pop_data_level", "reporting_level")) 
+
+add_vars(md_level_idn) <- dt_meta_vars|>
+  fselect(-c(cache_id, cpi_data_level, ppp_data_level,
+             gdp_data_level, pce_data_level,
+             pop_data_level, reporting_level))
+
+md_level_idn <- md_level_idn|>
+  joyn::joyn(dt_f, 
+             by = c("cache_id", "cpi_data_level", 
+                    "ppp_data_level", "gdp_data_level",
+                    "pce_data_level", "pop_data_level", 
+                    "reporting_level"),
+             match_type = "1:1",
+             y_vars_to_keep = c("survey_mean_lcu"))|>
+  fmutate(survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+
+
+waldo::compare(md_level_idn$mean, md_level_idn$survey_mean_ppp, tolerance = 1e-6)
+
+```
+
+Compare `cpi` and `ppp`
+
+```{r}
+md_level_idn2 <- md_level_idn |>
+  frename(cpi = "cpi_org",ppp = "ppp_org")|>
+  joyn::joyn(dl_aux$cpi|> 
+                     fselect(country_code, 
+                             survey_year, 
+                             survey_acronym,
+                             cpi_data_level, 
+                             cpi),
+                   by = c(
+                     "country_code", "survey_year",
+                     "survey_acronym", "cpi_data_level"
+                   ),
+                   match_type = "m:1",
+             y_vars_to_keep = c("cpi"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)|>
+  joyn::joyn(dl_aux$ppp|>
+                     fsubset(ppp_default == TRUE)|> # Select default PPP values
+                     fselect(country_code,
+                             ppp_data_level,
+                             ppp),
+                   by = c("country_code", "ppp_data_level"),
+                   match_type = "m:1",
+             y_vars_to_keep = c("ppp"))|>
+  fsubset(.joyn != "y")|>
+  fselect(-.joyn)
+
+waldo::compare(md_level_idn2$cpi_org, md_level_idn2$cpi, tolerance = 1e-6)
+waldo::compare(md_level_idn2$ppp_org, md_level_idn2$ppp, tolerance = 1e-6)
+```

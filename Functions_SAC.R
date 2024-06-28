@@ -17,12 +17,13 @@ get_cache <- function(cache) {
             surveyid_year, survey_acronym, survey_year, welfare_type,
             distribution_type, gd_type, imputation_id, cpi_data_level, 
             ppp_data_level, gdp_data_level, pce_data_level, 
-            pop_data_level, reporting_level, area)|>
-    ftransform(area = as.character(area))
+            pop_data_level, reporting_level, 
+            #area,
+            cpi, ppp)
+  # |>
+  #   ftransform(area = as.character(area))
   
-  #dt[dt$area=="","area"] <- "national" 
-  
-  setv(dt$area,"", "national") # Faster than ifelse or data.table above
+  # setv(dt$area,"", "national") 
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Return   ---------
@@ -80,12 +81,14 @@ db_compute_survey_mean_sac <- function(cache,
   # ------ Prepare data -----
   
   # Select variables for metadata
-  metadata_vars <- c("cache_id", "reporting_level", "area",
+  metadata_vars <- c("cache_id", "reporting_level", 
+                     #"area",
                      "survey_id", "country_code", "surveyid_year", 
                      "survey_acronym","survey_year", "welfare_type", 
                      "distribution_type","gd_type","cpi_data_level",
                      "ppp_data_level", "gdp_data_level", 
-                     "pce_data_level", "pop_data_level")
+                     "pce_data_level", "pop_data_level",
+                     "cpi", "ppp")
   
   # ------ Micro data urban/rural -----
   
@@ -185,8 +188,8 @@ db_compute_survey_mean_sac <- function(cache,
                  "surveyid_year", 
                  "survey_acronym",
                  "survey_year", 
-                 "welfare_type",
-                 "area")
+                 "welfare_type")
+                 #"area")
   
   setorderv(dt_c, sort_vars) # Order rows
   
@@ -354,72 +357,14 @@ db_create_lcu_table_sac <- function(dt, pop_table, pfw_table) {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 1.4 svy_mean_ppp_table --------
 ##
-## Objective: Deflated survey mean (DSM) table (merge with CPI and PPP table)
+## Objective: Deflated survey mean (DSM) table, add other 
+## logical variables, and calculate aggregated means
 
-db_create_dsm_table_sac <- function(lcu_table, cpi_table, ppp_table) {
-  
-  
-  #--------- Merge with CPI ---------
-  
-  # Merge survey table with CPI (left join)
-  dt <- joyn::joyn(lcu_table, cpi_table|> 
-                     fselect(country_code, 
-                             survey_year, 
-                             survey_acronym,
-                             cpi_data_level, 
-                             cpi),
-                   by = c(
-                     "country_code", "survey_year",
-                     "survey_acronym", "cpi_data_level"
-                   ),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure CPI table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  dt <- dt|>
-    fsubset(.joyn != "y")|>
-    fselect(-.joyn)
-  
-  #--------- Merge with PPP ---------
-  
-  # Merge survey table with PPP (left join)
-  dt <- joyn::joyn(dt, ppp_table|>
-                     fsubset(ppp_default == TRUE)|> # Select default PPP values
-                     fselect(country_code,
-                             ppp_data_level,
-                             ppp),
-                   by = c("country_code", "ppp_data_level"),
-                   match_type = "m:1"
-  )
-  
-  if (nrow(dt[.joyn == "x"]) > 0) {
-    msg <- "We should not have NOT-matching observations from survey-mean tables"
-    hint <- "Make sure PPP table is up to date"
-    rlang::abort(c(
-      msg,
-      i = hint
-    ),
-    class = "pipdm_error"
-    )
-  }
-  
-  dt <- dt |>
-    fsubset(.joyn != "y")|>
-    fselect(-.joyn)
+db_create_dsm_table_sac <- function(lcu_table) {
   
   #--------- Deflate welfare mean ---------
   
-  dt <- fmutate(dt, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+  dt <- fmutate(lcu_table, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
   
   #--------- Add comparable spell --------- ## 
   
@@ -552,57 +497,20 @@ db_dist_stats_sac <- function(cache,
   dt_m <- cache |>
     fselect(cache_id, distribution_type, cpi_data_level, ppp_data_level,
             gdp_data_level, pce_data_level,
-            pop_data_level, reporting_level, 
-            imputation_id, weight, welfare_ppp) |>
+            pop_data_level, reporting_level,
+            imputation_id, weight, welfare_ppp)|>
     fsubset(distribution_type %in% c("micro", "imputed"))
   
   # 2. Micro Data: Level Estimation  ----
   
-  md_level <- dt_m |>
-    fsubset(distribution_type %in% c("micro")) |>
-    fselect(-c(distribution_type))|>
+  md_id_level <- dt_m |>
     roworder(cache_id, pop_data_level, welfare_ppp) |>
-    collapse::join(mean_table |> 
-                     fselect(cache_id, cpi_data_level, ppp_data_level,
-                             gdp_data_level, pce_data_level,
-                             pop_data_level, reporting_level, 
-                             survey_mean_ppp, reporting_pop),
-                   on=c("cache_id", "cpi_data_level", "ppp_data_level",
-                        "gdp_data_level", "pce_data_level",
-                        "pop_data_level", "reporting_level"), 
-                   # GC Note: it is actually over-identified at this stage. 
-                   # Maybe we can exlpore whether this is really needed?
-                   validate = "m:1",
-                   verbose = 0,
-                   overid = 2,
-                   column = list(".joyn", c("x", "y", "x & y")))|>
-    _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
-                                  weight  = weight,
-                                  mean = funique(survey_mean_ppp))),
-      by = .(cache_id, cpi_data_level, ppp_data_level,
-             gdp_data_level, pce_data_level,
-             pop_data_level, reporting_level)]|>
-    fungroup()|>
-    frename(survey_median_ppp = median)|>
-    fmutate(reporting_level = as.character(reporting_level),
-            pop_data_level = as.character(pop_data_level)) |>
-    fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level)) # 3 minutes
-  
-  
-  # 3. Imputed Data: Level Estimation  ----
-  
-  id_level <- dt_m |>
-    fsubset(distribution_type %in% c("imputed")) |>
-    fselect(-c(distribution_type))|>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                   weight  = weight,
                                   mean = NULL)),
-      # Note: Here we remove area from the grouping too, and we add the other levels:
       by = .(cache_id, imputation_id, cpi_data_level, ppp_data_level,
              gdp_data_level, pce_data_level,
              pop_data_level, reporting_level)]|>
-    # Note: and here again, area out, other levels in:
     fgroup_by(cache_id, cpi_data_level, ppp_data_level,
               gdp_data_level, pce_data_level,
               pop_data_level, reporting_level)|>
@@ -614,14 +522,14 @@ db_dist_stats_sac <- function(cache,
     fmutate(reporting_level = as.character(reporting_level),
             pop_data_level = as.character(pop_data_level))|>
     fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level)) # < 1 minute
+               gdp_data_level, pce_data_level))
   
-  # 4. Micro and Imputed Data: National Estimation ----
+  
+  # 3. Micro and Imputed Data: National Estimation ----
   
   md_id_national <- dt_m |>
     # Gc Note: this is equivalent to having pop_data_level > 1 and D2 in cache_id:
     fsubset(reporting_level != 'national' & ppp_data_level != 'national') |>
-    fselect(-c(distribution_type))|>
     roworder(cache_id, imputation_id, welfare_ppp)|>
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp, weight = weight)),
       by = .(cache_id, imputation_id)]|>
@@ -666,7 +574,6 @@ db_dist_stats_sac <- function(cache,
     # 4. Group and Aggregate Data: Level and Area Estimation -----
     
     gd_ag_level <- dt_jn |>
-      fselect(-c(distribution_type, reporting_pop)) |>
       roworder(cache_id, cpi_data_level, ppp_data_level,
                gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
@@ -685,11 +592,10 @@ db_dist_stats_sac <- function(cache,
     
     setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_level)))
     
-    # 5. Aggregate Data: National estimation (synth needed) ----
+    # 4. Aggregate Data: National estimation (synth needed) ----
     
     ag_syn <- dt_jn |>
       fsubset(distribution_type %in% c("aggregate")) |>
-      fselect(-c(distribution_type))|>
       roworder(cache_id, cpi_data_level, ppp_data_level,
                gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
@@ -718,15 +624,15 @@ db_dist_stats_sac <- function(cache,
       fmutate(reporting_level = as.character("national"),
               pop_data_level = as.character("national")) # immediate
     
-    # 6. Row bind and return ----
+    # 5. Row bind and return ----
     
-    final <- rowbind(md_level, id_level, md_id_national, gd_ag_level, ag_national)
+    final <- rowbind(md_id_level, md_id_national, gd_ag_level, ag_national)
     
     return(final)
     
   }
-  
-  final <- rowbind(md_level, id_level, md_id_national)
+
+  final <- rowbind(md_id_level, md_id_national)
   
   return(final)
   
@@ -739,7 +645,7 @@ db_dist_stats_sac <- function(cache,
 ## and create median in LCU
 ## Note: This function is missing the warnings from the old pipeline/targets code
 
-db_create_dist_table_sac <- function(dt, dsm_table){
+db_create_dist_table_sac <- function(dt, dsm_table, cache_inventory){
   
   dt_clean <- dt |>
     collapse::join(dsm_table|>
@@ -751,14 +657,27 @@ db_create_dist_table_sac <- function(dt, dsm_table){
                    validate = "1:1",
                    how = "left",
                    verbose = 0,
-                   overid = 2)|>
+                   overid = 2)
+  
+  dt_clean[cache_inventory, 
+           # I think this is a patch but it does not check if We
+           # are using the last version of dataliweb.
+     on = "cache_id",
+     survey_id := i.survey_id
+  ]
+  
+  dt_clean <- dt_clean |>
     fmutate(survey_median_lcu = survey_median_ppp*ppp*cpi,
             survey_id = toupper(survey_id))|>
     fselect(-ppp, -cpi)|>
     colorder(survey_id, cache_id, wb_region_code, pcn_region_code, country_code,
              survey_acronym, surveyid_year, survey_year, reporting_year, welfare_type,
              reporting_level, survey_median_lcu, survey_median_ppp, decile1:decile10,
-             mean, gini, polarization, mld, pop_data_level)
+             mean, gini, polarization, mld, pop_data_level)  
+  
+  # change factors to characters
+  dt_clean <- dt_clean |>
+    fcomputev(is.factor, as.character, keep = names(dt_clean))
   
   return(dt_clean)
 }

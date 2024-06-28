@@ -144,11 +144,10 @@ Means_pipeline_sac <- function(cache_inventory,
                                                     pfw_table = dl_aux$pfw)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ## Means in PPP --------
+  ## Means in PPP and other changes --------
   
-  svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac,
-                                                    cpi_table = dl_aux$cpi,
-                                                    ppp_table = dl_aux$ppp)
+  svy_mean_ppp_table_sac <- db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table_sac)
+  
   return(svy_mean_ppp_table_sac)
 }
 
@@ -211,6 +210,28 @@ all.equal(means_out_tar,compare_sac)
 waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
 
 rm(compare_sac)
+
+# Filter without survey_mean_ppp, cpi and ppp
+compare_sac <- means_out_sac[, -c("survey_mean_ppp","ppp","cpi")]
+compare_tar <- means_out_tar[, -c("survey_mean_ppp","ppp","cpi")]
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Order rows
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
+data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+
+# Order columns
+compare_sac <- compare_sac[, colnames(compare_tar), with = FALSE]
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)
+
+rm(compare_sac,compare_tar)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Dist Stats   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -219,7 +240,8 @@ rm(compare_sac)
 ## 3.1 SAC --------
 
 Dist_stats_sac <- function(cache, 
-                           dsm_table){
+                           dsm_table,
+                           cache_inventory){
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Calculate Distributional Statistics --------
@@ -231,7 +253,8 @@ Dist_stats_sac <- function(cache,
   ## Add/remove relevant variables --------
   
   dt_dist_stats_sac <- db_create_dist_table_sac(dt = db_dist_stats,
-                                                dsm_table = dsm_table)
+                                                dsm_table = dsm_table,
+                                                cache_inventory = cache_inventory)
   
   return(dt_dist_stats_sac)
 }
@@ -266,7 +289,8 @@ Dist_stats_tar <- function(cache,
 
 # Load output:
 dist_out_sac <- Dist_stats_sac(cache = cache_sac, 
-                               dsm_table = means_out_sac)
+                               dsm_table = means_out_sac,
+                               cache_inventory = cache_inventory)
 
 dist_out_tar <- Dist_stats_tar(cache = cache_ls,
                                dsm_table = means_out_tar, 
@@ -298,6 +322,60 @@ all.equal(dist_out_tar,compare_sac)
 
 waldo::compare(dist_out_tar,compare_sac, tolerance = 1e-7)
 
+rm(compare_sac)
+
+# Filter without the changes in ppp/cpi
+cpi_same <- means_out_tar|>
+  joyn::joyn(means_out_sac,
+                   by = c("cache_id", 
+                          "cpi_data_level", 
+                          "ppp_data_level",
+                          "cpi",
+                          "ppp"
+                   ),
+                   match_type = "1:1",
+                   keep = "left",
+                   y_vars_to_keep = FALSE)|>
+  fsubset(.joyn != "x" & (!is.na(cpi)|!is.na(ppp)))|>
+  fselect(-.joyn)
+  
+compare_sac <- dist_out_sac|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn))
+
+compare_tar <- dist_out_tar|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn))
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Order rows
+data.table::setorder(compare_sac, cache_id, reporting_level)
+data.table::setorder(compare_tar, cache_id, reporting_level)
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)
+
+rm(compare_sac,compare_tar)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. Prod_svy_estimation   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -343,4 +421,46 @@ all.equal(Prod_svy_estimation_tar,to_compare)
 
 waldo::compare(Prod_svy_estimation_tar,to_compare, tolerance = 1e-7)
 
+rm(to_compare)
 
+# Filter without the changes in ppp/cpi and survey_median_ppp
+
+compare_tar <- Prod_svy_estimation_tar|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x" & !is.na(survey_median_ppp))|>
+  fselect(-c(.joyn))
+
+compare_sac <- Prod_svy_estimation_sac|>
+  joyn::joyn(cpi_same,
+             by = c("cache_id", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x" )|>
+  fselect(-c(.joyn))|>
+  joyn::joyn(compare_tar,
+             by = c("cache_id", "pop_data_level", "reporting_level"
+             ),
+             match_type = "1:1",
+             keep = "left",
+             y_vars_to_keep = FALSE) |>
+  fsubset(.joyn != "x")|>
+  fselect(-c(.joyn))
+
+# Eliminate attributes 
+compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
+
+# Comparison
+all.equal(compare_tar,compare_sac)
+
+waldo::compare(compare_tar,compare_sac, tolerance = 1e-7)

@@ -67,7 +67,7 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-source("_common_SAC2.R", echo = FALSE) 
+source("_common_SAC.R", echo = FALSE) 
 
 base_dir |> 
   fs::path("_cache_loading_saving.R") |> 
@@ -137,7 +137,7 @@ Means_pipeline_sac <- function(cache_inventory,
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Means in LCU --------
   
-  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache_sac, 
+  svy_mean_lcu_sac <- db_compute_survey_mean_sac(cache = cache, 
                                                  gd_mean = gd_means_sac)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -202,8 +202,12 @@ means_out_tar <- Means_pipeline_tar(cache_inventory,
 compare_sac <- as.data.table(lapply(means_out_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
-data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
+data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level)
+
+# Set similar keys
+setkey(means_out_tar, "country_code")
+setkey(compare_sac, "country_code")
 
 # Order columns
 compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
@@ -211,7 +215,7 @@ compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
 # Comparison
 all.equal(means_out_tar,compare_sac)
 
-waldo::compare(means_out_tar,compare_sac[1:2459,], tolerance = 1e-7)
+waldo::compare(means_out_tar,compare_sac, tolerance = 1e-6)
 
 rm(compare_sac)
 
@@ -219,12 +223,16 @@ rm(compare_sac)
 compare_sac <- means_out_sac[, -c("survey_mean_ppp","ppp","cpi")]
 compare_tar <- means_out_tar[, -c("survey_mean_ppp","ppp","cpi")]
 
-# Eliminate attributes 
+# Eliminate attributes
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
-data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,pop_data_level)
+data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, pop_data_level)
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
 
 # Order columns
 compare_sac <- compare_sac[, colnames(compare_tar), with = FALSE]

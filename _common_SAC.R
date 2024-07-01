@@ -157,6 +157,14 @@ pip_inventory <-
     maindir = gls$PIP_DATA_DIR)
 
 
+
+
+if (".joyn" %in% names(pip_inventory)) {
+  pip_inventory[, .joyn := NULL]
+}
+
+
+
 ### pipeline inventory ----
 
 # filter by  year 

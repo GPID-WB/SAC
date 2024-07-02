@@ -606,11 +606,13 @@ db_dist_stats_sac <- function(cache,
     _[, as.list(wrp_md_dist_stats(welfare = welfare_ppp,
                                   weight  = weight,
                                   mean = NULL)),
-      by = .(cache_id, imputation_id, cpi_data_level, ppp_data_level,
-             gdp_data_level, pce_data_level,
+      by = .(cache_id, imputation_id, 
+             # cpi_data_level, ppp_data_level,
+             # gdp_data_level, pce_data_level,
              pop_data_level, reporting_level)]|>
-    fgroup_by(cache_id, cpi_data_level, ppp_data_level,
-              gdp_data_level, pce_data_level,
+    fgroup_by(cache_id, 
+              # cpi_data_level, ppp_data_level,
+              # gdp_data_level, pce_data_level,
               pop_data_level, reporting_level)|>
     collapg(fmean, cols = c("mean","median","gini",
                             "polarization","mld",
@@ -618,9 +620,10 @@ db_dist_stats_sac <- function(cache,
     fungroup()|>
     frename(survey_median_ppp = median)|>
     fmutate(reporting_level = as.character(reporting_level),
-            pop_data_level = as.character(pop_data_level))|>
-    fselect(-c(cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level))
+            pop_data_level = as.character(pop_data_level))
+  # |>
+  #   fselect(-c(cpi_data_level, ppp_data_level,
+  #              gdp_data_level, pce_data_level))
   
   
   # 3. Micro and Imputed Data: National Estimation ----
@@ -651,12 +654,14 @@ db_dist_stats_sac <- function(cache,
               pop_data_level, reporting_level, weight, welfare) |>
       #fsubset(distribution_type %in% c("group", "aggregate"))|>
       collapse::join(mean_table |> 
-                       fselect(cache_id, cpi_data_level, ppp_data_level,
-                               gdp_data_level, pce_data_level,
+                       fselect(cache_id, 
+                               # cpi_data_level, ppp_data_level,
+                               # gdp_data_level, pce_data_level,
                                pop_data_level, reporting_level, 
                                survey_mean_ppp, reporting_pop),
-                     on=c("cache_id", "cpi_data_level", "ppp_data_level",
-                          "gdp_data_level", "pce_data_level",
+                     on=c("cache_id", 
+                          # "cpi_data_level", "ppp_data_level",
+                          # "gdp_data_level", "pce_data_level",
                           "pop_data_level", "reporting_level"), 
                      # GC Note: it is actually over-identified at this stage as well.
                      validate = "m:1",
@@ -674,20 +679,23 @@ db_dist_stats_sac <- function(cache,
     # 4. Group and Aggregate Data: Level and Area Estimation -----
     
     gd_ag_level <- dt_jn |>
-      roworder(cache_id, cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level,
+      roworder(cache_id, 
+               # cpi_data_level, ppp_data_level,
+               # gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
       _[, as.list(safe_wrp_gd_dist_stats(welfare = welfare,
                                          population = weight,
                                          mean = funique(survey_mean_ppp))),
-        by = .(cache_id, cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level,
+        by = .(cache_id, 
+               # cpi_data_level, ppp_data_level,
+               # gdp_data_level, pce_data_level,
                pop_data_level, reporting_level)]|>
       frename(survey_median_ppp = median)|>
       fmutate(reporting_level = as.character(reporting_level),
-              pop_data_level = as.character(pop_data_level))|>
-      fselect(-c(cpi_data_level, ppp_data_level,
-                 gdp_data_level, pce_data_level)) # immediate
+              pop_data_level = as.character(pop_data_level))
+    # |>
+    #   fselect(-c(cpi_data_level, ppp_data_level,
+    #              gdp_data_level, pce_data_level)) # immediate
     
     
     setrename(gd_ag_level, gsub("deciles", "decile", names(gd_ag_level)))
@@ -696,11 +704,13 @@ db_dist_stats_sac <- function(cache,
     
     ag_syn <- dt_jn |>
       fsubset(distribution_type %in% c("aggregate")) |>
-      roworder(cache_id, cpi_data_level, ppp_data_level,
-               gdp_data_level, pce_data_level,
+      roworder(cache_id, 
+               # cpi_data_level, ppp_data_level,
+               # gdp_data_level, pce_data_level,
                pop_data_level, reporting_level, welfare) |>
-      fgroup_by(cache_id, cpi_data_level, ppp_data_level,
-                gdp_data_level, pce_data_level,
+      fgroup_by(cache_id, 
+                # cpi_data_level, ppp_data_level,
+                # gdp_data_level, pce_data_level,
                 pop_data_level, reporting_level)|>
       fsummarise(welfare =  wbpip:::sd_create_synth_vector(
         welfare = welfare,
@@ -753,8 +763,8 @@ db_create_dist_table_sac <- function(dt, dsm_table, cache_inventory){
                              "country_code", "surveyid_year", "survey_year",
                              "reporting_year", "survey_acronym", "welfare_type",
                              "cpi", "ppp", "pop_data_level", "reporting_level"),
-                   #on=c("cache_id", "reporting_level", "pop_data_level"),
-                   on=c("cache_id", "reporting_level"),
+                   on=c("cache_id", "reporting_level", "pop_data_level"),
+                   #on=c("cache_id", "reporting_level"),
                    validate = "1:1",
                    how = "left",
                    verbose = 0,

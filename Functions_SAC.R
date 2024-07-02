@@ -193,22 +193,29 @@ db_compute_survey_mean_sac <- function(cache,
     #           pop_data_level, reporting_level)|>
     fgroup_by(cache_id, reporting_level)|>
     collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
-    fungroup()|>
-    roworder(cache_id, reporting_level)
+    fungroup()
+  #|>
+   # roworder(cache_id, reporting_level)
   
   dt_meta_vars <- dt |>
     get_vars(metadata_vars) |>
     # funique(cols = c("cache_id", "cpi_data_level", "ppp_data_level",
     #                  "gdp_data_level", "pce_data_level",
     #                  "pop_data_level", "reporting_level"))
-    funique(cols = c("cache_id", "reporting_level"))|>
-    roworder(cache_id, reporting_level)|>
-    fselect(-c(cache_id, reporting_level))
+    funique()
+  #|>
+    #roworder(cache_id, reporting_level)
+  #|>
+    #fselect(-c(cache_id, reporting_level))
   # fselect(-c(cache_id, cpi_data_level, ppp_data_level,
   #            gdp_data_level, pce_data_level,
   #            pop_data_level, reporting_level)) 
   
-  add_vars(dt_c) <- dt_meta_vars
+  dt_c <- joyn::joyn(dt_meta_vars, dt_c,
+                    by = c("cache_id", "reporting_level"),
+                    match_type = "m:1")
+  
+  # add_vars(dt_c) <- dt_meta_vars
   
   # # super fast join of unique variables. 
   # dt_c <- if (fnrow(dt_meta_vars) == fnrow(dt_c)) {

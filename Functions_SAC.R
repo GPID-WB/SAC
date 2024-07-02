@@ -548,6 +548,24 @@ db_create_dsm_table_sac <- function(lcu_table) {
   dt <- dt |>
     fcomputev(is.factor, as.character, keep = names(dt))
   
+  # fix data lvel vars for cases like IDN 1984 (Andres code)
+  dt_vars <- grep("data_level$", names(dt), value = TRUE)
+  
+  dt <- funique(dt, 
+                cols =  c("country_code",
+                          "reporting_level",
+                          "welfare_type",
+                          "survey_year")
+  )
+  
+  
+  dt[,
+     (dt_vars) := lapply(.SD, \(.) {
+       fifelse(reporting_level == "national", reporting_level, .)
+     }),
+     .SDcols = dt_vars
+  ]
+  
   return(dt)
 }
 

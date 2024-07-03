@@ -28,8 +28,8 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240429"  
-identity           <- "INT"
+release            <- "20240326"  
+identity           <- "PROD"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
@@ -67,11 +67,11 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-source("_common_SAC.R", echo = FALSE) 
+source("_common_SAC_old.R", echo = FALSE) 
 
-base_dir |> 
-  fs::path("_cache_loading_saving.R") |> 
-  source(echo = FALSE)
+# base_dir |> 
+#   fs::path("_cache_loading_saving.R") |> 
+#   source(echo = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Load test data   ---------
@@ -85,22 +85,24 @@ base_dir |>
 
 ### Cache inventory ---------
 
-# cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-# cache_ids <- get_cache_id(cache_inventory) 
-# cache_dir <- get_cache_files(cache_inventory)
-# 
-# ### Full Cache ---------
-# 
-# # In list format:
-# 
-# cache_ls <- pipload::pip_load_cache(type="list", version = gls$vintage_dir) 
-# 
-# # remove all the surveyar that are not available in the PFW ----
-# 
-# source("PFW_fix.R") 
-# 
-# In dt format:
-# cache_tb <- rowbind(cache, fill = TRUE)
+cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
+
+# Eliminate duplicates on cache_inventory
+cache_inventory <- cache_inventory[!duplicated(cache_inventory,by = c("survey_id","welfare_type")),]
+cache_ids <- get_cache_id(cache_inventory)
+cache_dir <- get_cache_files(cache_inventory)
+
+
+
+### Full Cache ---------
+
+# In list format:
+
+cache <- pipload::pip_load_cache(type="list", version = gls$vintage_dir)
+
+# remove all the surveys that are not available in the PFW ----
+
+source("PFW_fix.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------

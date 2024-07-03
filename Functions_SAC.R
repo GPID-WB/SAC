@@ -11,30 +11,6 @@ get_cache <- function(cache) {
   # computations   ---------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
-  #cache_tb <- rowbind(cache, fill = TRUE)
-  
-  # Select variables and modify the area variable for imputed or group
-  # cache_tb <- cache_tb |>
-  #   fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code, 
-  #           surveyid_year, survey_acronym, survey_year, welfare_type,
-  #           distribution_type, gd_type, imputation_id, cpi_data_level, 
-  #           ppp_data_level, gdp_data_level, pce_data_level, 
-  #           pop_data_level, reporting_level, 
-  #           area,
-  #           cpi, ppp)
-  # |>
-  #   ftransform(area = as.character(area))
-  
-  # setv(dt$area,"", "national")
-  
-  # Unlist in two lists
-  
-  # dt_ls[["micro_imputed"]] <- cache_tb|>
-  #   fsubset(distribution_type %in% c("micro","imputed"))
-  
-  # dt_ls[["group_aggregate"]] <- cache_tb|>
-  #   fsubset(distribution_type %in% c("group","aggregate"))
-  
   dt_ls <- list()
   dt_ls[["micro_imputed"]] <- lapply(cache, function(x){
     if("distribution_type" %in% names(x)){
@@ -205,32 +181,40 @@ db_compute_survey_mean_sac <- function(cache,
   
   dt_c <- joyn::joyn(dt_meta_vars, dt_c,
                     by = c("cache_id", "reporting_level"),
-                    match_type = "m:1")
+                    match_type = "m:1",
+                    reportvar = FALSE)
   
   #  ------ Group data -----
   
   if(nrow(cache[["group_aggregate"]])!=0){
     
-    dt_g <- cache[["group_aggregate"]]|>
-      fselect(-c(welfare, imputation_id)) |> 
-      #fgroup_by(metadata_vars)|>
-      fgroup_by(cache_id, reporting_level)|>
-      collapg(custom = list(fsum = "weight"))|>
-      joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
-                 by = c(
-                   "cache_id", "pop_data_level"
-                 ),
-                 y_vars_to_keep = "survey_mean_lcu",
-                 match_type = "1:1", keep = "left", 
-                 reportvar = FALSE, sort = FALSE)
+    dt_g <- cache[["group_aggregate"]] |> 
+      fgroup_by(cache_id, reporting_level, 
+                pop_data_level)|> 
+      collapg(custom = list(fsum = "weight"))
     
     dt_meta_vars <- cache[["group_aggregate"]]|>
       get_vars(metadata_vars) |>
       funique()
     
-    dt_g <- joyn::joyn(dt_meta_vars, dt_g,
-                       by = c("cache_id", "reporting_level"),
-                       match_type = "m:1")
+    dt_g <- dt_meta_vars|>
+      joyn::joyn(dt_g,
+                 by = c("cache_id", "reporting_level","pop_data_level"),
+                 match_type = "m:1",
+                 y_vars_to_keep = "weight", 
+                 keep = "left", 
+                 reportvar = FALSE, 
+                 sort = FALSE
+                 ) |>
+      joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
+                 by = c(
+                   "cache_id", "pop_data_level"
+                 ),
+                 y_vars_to_keep = "survey_mean_lcu",
+                 match_type = "m:1", 
+                 keep = "left", 
+                 reportvar = FALSE, 
+                 sort = FALSE)
     
     dt_c <- collapse::rowbind(dt_c, dt_g) 
     
@@ -672,6 +656,7 @@ db_dist_stats_sac <- function(cache,
     # Aggregate to national
     
     ag_national <- ag_syn |> 
+      fsubset(!is.na(welfare))|> # Patch to eliminate NA from IDN error
       roworder(cache_id, welfare)|>
       _[, as.list(wrp_md_dist_stats(welfare = welfare, weight = weight)),
         by = .(cache_id)]|>

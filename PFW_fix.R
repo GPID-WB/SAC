@@ -20,7 +20,7 @@ svy_in_pfw <- dl_aux$pfw[, link]
 pattern <-  "([[:alnum:]]{3}_[[:digit:]]{4}_[[:alnum:]\\-]+)(.*)"
 
 cache_names <- 
-  names(cache_ls) |> 
+  names(cache) |> 
   gsub(pattern = pattern, 
        replacement = "\\1", 
        x = _)
@@ -36,7 +36,7 @@ cache_dir_names <-
 to_drop_cache     <- which(!cache_names %in% svy_in_pfw)
 to_drop_cache_dir <- which(!cache_dir_names %in% svy_in_pfw)
 
-cache_ls[to_drop_cache]         <- NULL
+cache[to_drop_cache]         <- NULL
 if (length(to_drop_cache_dir) > 0)
   cache_dir <- cache_dir[-to_drop_cache_dir]
 
@@ -52,8 +52,8 @@ cache_ids <- get_cache_id(cache_inventory)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## notify that lenghts are different ---
 
-if (length(cache_ls) != length(cache_dir)) {
-  cli::cli_abort("Lengths of cache list ({length(cache_ls)}) and cache directory 
+if (length(cache) != length(cache_dir)) {
+  cli::cli_abort("Lengths of cache list ({length(cache)}) and cache directory 
                  ({length(cache_dir)}) are not the same")
 }
 

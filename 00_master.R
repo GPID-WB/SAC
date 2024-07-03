@@ -28,8 +28,8 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240326"  
-identity           <- "PROD"
+release            <- "20240429"  
+identity           <- "INT"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
 
@@ -67,42 +67,36 @@ withr::with_dir(new = base_dir,
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-source("_common_SAC_old.R", echo = FALSE) 
+source("_common_SAC.R", echo = FALSE) 
 
-# base_dir |> 
-#   fs::path("_cache_loading_saving.R") |> 
-#   source(echo = FALSE)
+base_dir |>
+  fs::path("_cache_loading_saving.R") |>
+  source(echo = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Load test data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## The following file is run in the pipeline but we skipped it to save time
-#
-# base_dir |>
-#   fs::path("_cache_loading_saving.R") |>
-#   source(echo = FALSE)
-
-### Cache inventory ---------
-
-cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-
-# Eliminate duplicates on cache_inventory
-cache_inventory <- cache_inventory[!duplicated(cache_inventory,by = c("survey_id","welfare_type")),]
-cache_ids <- get_cache_id(cache_inventory)
-cache_dir <- get_cache_files(cache_inventory)
-
-
-
-### Full Cache ---------
-
-# In list format:
-
-cache <- pipload::pip_load_cache(type="list", version = gls$vintage_dir)
-
-# remove all the surveys that are not available in the PFW ----
-
-source("PFW_fix.R")
+# ### Cache inventory ---------
+# 
+# cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
+# 
+# # Eliminate duplicates on cache_inventory
+# cache_inventory <- cache_inventory[!duplicated(cache_inventory,by = c("survey_id","welfare_type")),]
+# cache_ids <- get_cache_id(cache_inventory)
+# cache_dir <- get_cache_files(cache_inventory)
+# 
+# 
+# 
+# ### Full Cache ---------
+# 
+# # In list format:
+# 
+# cache <- pipload::pip_load_cache(type="list", version = gls$vintage_dir)
+# 
+# # remove all the surveys that are not available in the PFW ----
+# 
+# source("PFW_fix.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------

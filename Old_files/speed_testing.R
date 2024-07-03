@@ -140,3 +140,47 @@ if (requireNamespace("highcharter")) {
 } else {
   boxplot(bench, outline = FALSE)
 }
+
+# ---- After Andres function
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+get_cache_tb <- function(cache) {
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # computations   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  cache_tb <- rowbind(cache, fill = TRUE)
+  
+  cache_tb <- cache_tb |>
+    fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code,
+            surveyid_year, survey_acronym, survey_year, welfare_type,
+            distribution_type, gd_type, imputation_id, cpi_data_level,
+            ppp_data_level, gdp_data_level, pce_data_level,
+            cpi, ppp)
+  
+  # Unlist in two lists
+  
+  dt_ls <- list()
+  
+  dt_ls[["micro_imputed"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("micro","imputed"))
+  
+  dt_ls[["group_aggregate"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("group","aggregate"))
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  return(dt_ls)
+  
+}
+
+
+
+mb( 
+  firts_rb = {get_cache_tb(cache)}, 
+  last_rb = {get_cache(cache)}, 
+  times = 100L
+)

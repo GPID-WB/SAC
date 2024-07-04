@@ -88,7 +88,7 @@ list(
   
   tar_target(
     cache_sac,
-    get_cache(cache = cache_tb)
+    get_cache(cache = cache)
   ),
   
   # ### Modify cache for micro and imputed data
@@ -166,9 +166,7 @@ list(
   #              ppp_table = dl_aux$ppp)),
   
   tar_target(svy_mean_ppp_table,
-             db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table,
-                                     cpi_table = dl_aux$cpi,
-                                     ppp_table = dl_aux$ppp)),
+             db_create_dsm_table_sac(lcu_table = svy_mean_lcu_table)),
   
   ### Reference year Mean table ------
   
@@ -230,7 +228,8 @@ list(
   tar_target(
     dt_dist_stats,
     db_create_dist_table_sac(dt = dl_dist_stats,
-                             dsm_table = svy_mean_ppp_table)
+                             dsm_table = svy_mean_ppp_table,
+                             cache_inventory = cache_inventory)
   ),
   
   ## Output tables --------

@@ -170,9 +170,12 @@ db_compute_survey_mean_sac <- function(cache,
   dt_c <- cache[["micro_imputed"]] |>
     fgroup_by(cache_id, reporting_level,
               imputation_id)|> 
-    collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+    #collapg(custom = list(fmean = c(survey_mean_lcu = "welfare")), w = weight)|>
+    fsummarise(survey_mean_lcu = fmean(welfare, w = weight), 
+               weight          = fsum(weight)) |>
     fgroup_by(cache_id, reporting_level)|>
-    collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+   #collapg(custom = list(fmean = c(survey_mean_lcu = "survey_mean_lcu")), w = weight)|>
+    fsummarise(survey_mean_lcu = fmean(survey_mean_lcu, w = weight)) |>
     fungroup()
   
   dt_meta_vars <- cache[["micro_imputed"]] |>
@@ -188,24 +191,24 @@ db_compute_survey_mean_sac <- function(cache,
   
   if(nrow(cache[["group_aggregate"]])!=0){
     
-    dt_g <- cache[["group_aggregate"]] |> 
-      fgroup_by(cache_id, reporting_level, 
-                pop_data_level)|> 
-      collapg(custom = list(fsum = "weight"))
+    # dt_g <- cache[["group_aggregate"]] |> 
+    #   fgroup_by(cache_id, reporting_level, 
+    #             pop_data_level) |> 
+      #collapg(custom = list(fsum = "weight")) #This is needed when doing area
     
-    dt_meta_vars <- cache[["group_aggregate"]]|>
-      get_vars(metadata_vars) |>
-      funique()
+    # dt_meta_vars <- cache[["group_aggregate"]]|>
+    #   get_vars(metadata_vars) |>
+    #   funique()
     
-    dt_g <- dt_meta_vars|>
-      joyn::joyn(dt_g,
-                 by = c("cache_id", "reporting_level","pop_data_level"),
-                 match_type = "m:1",
-                 y_vars_to_keep = "weight", 
-                 keep = "left", 
-                 reportvar = FALSE, 
-                 sort = FALSE
-                 ) |>
+    dt_g <- cache[["group_aggregate"]] |>
+      # joyn::joyn(dt_g,
+      #            by = c("cache_id", "reporting_level","pop_data_level"),
+      #            match_type = "m:1",
+      #            y_vars_to_keep = "weight", 
+      #            keep = "left", 
+      #            reportvar = FALSE, 
+      #            sort = FALSE
+      #            ) |>
       joyn::joyn(gd_mean[!is.na(survey_mean_lcu)],
                  by = c(
                    "cache_id", "pop_data_level"

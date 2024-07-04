@@ -2,10 +2,10 @@
 bench <- microbenchmark::microbenchmark(
   times = 100,
   SAC = {
-    new_value = Means_pipeline_sac(cache_inventory, cache_tb, dl_aux)
+    new_value = Means_pipeline_sac(cache_inventory, cache_sac, dl_aux)
     },
   Nested = {
-    old_value = Means_pipeline_tar(cache_inventory, cache_ls, dl_aux)
+    old_value = Means_pipeline_tar(cache_inventory, cache, dl_aux)
     }
 )
 if (requireNamespace("highcharter")) {
@@ -29,11 +29,12 @@ if (requireNamespace("highcharter")) {
 bench_dist <- microbenchmark::microbenchmark(
   times = 100,
   SAC = {
-    new_value = Dist_stats_sac(cache_tb,
-                               means_out_sac)
+    new_value = Dist_stats_sac(cache_sac, 
+                               means_out_sac,
+                               cache_inventory)
   },
   Nested = {
-    old_value = Dist_stats_tar(cache_ls,
+    old_value = Dist_stats_tar(cache,
                                means_out_tar,
                                dl_aux,
                                cache_ids, 
@@ -56,7 +57,7 @@ if (requireNamespace("highcharter")) {
     highcharter::hc_title(text = "Comparison SAC vs Nested (Dist Stats)")
   
 } else {
-  boxplot(bench, outline = FALSE)
+  boxplot(bench_dist, outline = FALSE)
 } 
 
 bench_dist <- microbenchmark::microbenchmark(
@@ -140,3 +141,47 @@ if (requireNamespace("highcharter")) {
 } else {
   boxplot(bench, outline = FALSE)
 }
+
+# ---- After Andres function
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+get_cache_tb <- function(cache) {
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # computations   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  cache_tb <- rowbind(cache, fill = TRUE)
+  
+  cache_tb <- cache_tb |>
+    fselect(welfare, welfare_ppp, weight, survey_id, cache_id, country_code,
+            surveyid_year, survey_acronym, survey_year, welfare_type,
+            distribution_type, gd_type, imputation_id, cpi_data_level,
+            ppp_data_level, gdp_data_level, pce_data_level,
+            cpi, ppp)
+  
+  # Unlist in two lists
+  
+  dt_ls <- list()
+  
+  dt_ls[["micro_imputed"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("micro","imputed"))
+  
+  dt_ls[["group_aggregate"]] <- cache_tb|>
+    fsubset(distribution_type %in% c("group","aggregate"))
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  return(dt_ls)
+  
+}
+
+
+
+mb( 
+  firts_rb = {get_cache_tb(cache)}, 
+  last_rb = {get_cache(cache)}, 
+  times = 100L
+)

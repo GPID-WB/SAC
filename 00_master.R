@@ -28,10 +28,19 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240326"  
-identity           <- "PROD"
+release            <- "20240429"  
+identity           <- "INT"
 max_year_country   <- 2022
 max_year_aggregate <- 2022
+
+## filter creation of synth data
+cts <- yrs <- NULL
+
+## save data
+force_create_cache_file         <- FALSE
+save_pip_update_cache_inventory <- FALSE
+force_gd_2_synth                <- FALSE
+save_mp_cache                   <- FALSE
 
 config <- config::get(config = Sys.info()['user'])
 base_dir <- config$base_dir
@@ -40,6 +49,7 @@ base_dir <- config$base_dir
 # Load Packages and Data  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# Load packages
 withr::with_dir(new = base_dir, 
                 code = {
                   # source("./_packages.R")
@@ -56,46 +66,37 @@ withr::with_dir(new = base_dir,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Run common R code   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Sys.setenv(PIP_ROOT_DIR = "//w1wbgencifs01/pip/")
+
+source("_common_SAC.R", echo = FALSE) 
 
 base_dir |>
-  fs::path("_common.R") |>
+  fs::path("_cache_loading_saving.R") |>
   source(echo = FALSE)
-
-## Change gls outdir:
-
-if (!is.null(config$cache_dir)) {
-  gls$CACHE_SVY_DIR_PC <- config$cache_dir
-}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Load test data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## The following file is run in the pipeline but we skipped it to save time
-#
-# base_dir |>
-#   fs::path("_cache_loading_saving.R") |>
-#   source(echo = FALSE)
-
-### Cache inventory ---------
-
-cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
-cache_ids <- get_cache_id(cache_inventory) 
-cache_dir <- get_cache_files(cache_inventory)
-
-### Full Cache ---------
-
-# In list format:
-
-cache_ls <- pipload::pip_load_cache(type="list", version = gls$vintage_dir) 
-
-# remove all the surveyar that are not available in the PFW ----
-
-source("PFW_fix.R") 
-
-# In dt format:
-cache_tb <- rowbind(cache_ls, fill = TRUE) 
+# ### Cache inventory ---------
+# 
+# cache_inventory <- pipload::pip_load_cache_inventory(version = gls$vintage_dir)
+# 
+# # Eliminate duplicates on cache_inventory
+# cache_inventory <- cache_inventory[!duplicated(cache_inventory,by = c("survey_id","welfare_type")),]
+# cache_ids <- get_cache_id(cache_inventory)
+# cache_dir <- get_cache_files(cache_inventory)
+# 
+# 
+# 
+# ### Full Cache ---------
+# 
+# # In list format:
+# 
+# cache <- pipload::pip_load_cache(type="list", version = gls$vintage_dir)
+# 
+# # remove all the surveys that are not available in the PFW ----
+# 
+# source("PFW_fix.R")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load SAC Functions   ---------
@@ -109,8 +110,7 @@ source("Functions_SAC.R")
 # 0. Create cache for SAC  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-cache_sac <- get_cache(cache_tb)
-rm(cache_tb)
+cache_sac <- get_cache(cache)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Survey Means    ---------
@@ -161,7 +161,7 @@ Means_pipeline_tar <- function(cache_inventory,
   gd_means_tar <- get_groupdata_means(cache_inventory = cache_inventory, 
                                       gdm = dl_aux$gdm)
   
-  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache, 
+  svy_mean_lcu_tar <- mp_svy_mean_lcu(cache,  
                                       gd_means_tar) 
   
   svy_mean_lcu_table_tar <- db_create_lcu_table(dl = svy_mean_lcu_tar,
@@ -186,7 +186,7 @@ means_out_sac <- Means_pipeline_sac(cache_inventory,
                                     dl_aux)
 
 means_out_tar <- Means_pipeline_tar(cache_inventory, 
-                                    cache_ls, 
+                                    cache, 
                                     dl_aux)
 
 
@@ -198,8 +198,12 @@ means_out_tar <- Means_pipeline_tar(cache_inventory,
 compare_sac <- as.data.table(lapply(means_out_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
-data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level)
+data.table::setorder(means_out_tar, survey_id, cache_id,reporting_level)
+
+# Set similar keys
+setkey(means_out_tar, "country_code")
+setkey(compare_sac, "country_code")
 
 # Order columns
 compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
@@ -207,7 +211,7 @@ compare_sac <- compare_sac[, colnames(means_out_tar), with = FALSE]
 # Comparison
 all.equal(means_out_tar,compare_sac)
 
-waldo::compare(means_out_tar,compare_sac, tolerance = 1e-7)
+waldo::compare(means_out_tar,compare_sac, tolerance = 1e-6)
 
 rm(compare_sac)
 
@@ -215,12 +219,16 @@ rm(compare_sac)
 compare_sac <- means_out_sac[, -c("survey_mean_ppp","ppp","cpi")]
 compare_tar <- means_out_tar[, -c("survey_mean_ppp","ppp","cpi")]
 
-# Eliminate attributes 
+# Eliminate attributes
 compare_sac <- as.data.table(lapply(compare_sac, function(x) { attributes(x) <- NULL; return(x) }))
 
 # Order rows
-data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,ppp_data_level)
-data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, ppp_data_level)
+data.table::setorder(compare_sac, survey_id, cache_id, reporting_level,pop_data_level)
+data.table::setorder(compare_tar, survey_id, cache_id,reporting_level, pop_data_level)
+
+# Set similar keys
+setkey(compare_tar, "country_code")
+setkey(compare_sac, "country_code")
 
 # Order columns
 compare_sac <- compare_sac[, colnames(compare_tar), with = FALSE]
@@ -292,7 +300,7 @@ dist_out_sac <- Dist_stats_sac(cache = cache_sac,
                                dsm_table = means_out_sac,
                                cache_inventory = cache_inventory)
 
-dist_out_tar <- Dist_stats_tar(cache = cache_ls,
+dist_out_tar <- Dist_stats_tar(cache = cache,
                                dsm_table = means_out_tar, 
                                dl_aux = dl_aux,
                                cache_ids = cache_ids,

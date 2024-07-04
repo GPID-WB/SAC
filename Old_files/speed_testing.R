@@ -29,11 +29,12 @@ if (requireNamespace("highcharter")) {
 bench_dist <- microbenchmark::microbenchmark(
   times = 100,
   SAC = {
-    new_value = Dist_stats_sac(cache_tb,
-                               means_out_sac)
+    new_value = Dist_stats_sac(cache_sac, 
+                               means_out_sac,
+                               cache_inventory)
   },
   Nested = {
-    old_value = Dist_stats_tar(cache_ls,
+    old_value = Dist_stats_tar(cache,
                                means_out_tar,
                                dl_aux,
                                cache_ids, 
@@ -56,7 +57,7 @@ if (requireNamespace("highcharter")) {
     highcharter::hc_title(text = "Comparison SAC vs Nested (Dist Stats)")
   
 } else {
-  boxplot(bench, outline = FALSE)
+  boxplot(bench_dist, outline = FALSE)
 } 
 
 bench_dist <- microbenchmark::microbenchmark(

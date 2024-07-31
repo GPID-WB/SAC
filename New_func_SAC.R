@@ -1,5 +1,6 @@
 db_stats_sac <- function(cache, 
-                         gd_mean) {
+                         gd_mean,
+                         pop_table) {
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Means LCU   ---------
@@ -63,6 +64,138 @@ db_stats_sac <- function(cache,
   #--------- Deflate welfare mean ---------
   
   dt_c <- fmutate(dt_c, survey_mean_ppp = survey_mean_lcu / ppp / cpi)
+  
+  # ---- Merge with PFW ----
+  
+  # Select columns and merge LCU table with PFW (left join)
+  dt_c <- joyn::joyn(dt_c, pfw_table|>
+                     fselect(wb_region_code, pcn_region_code,
+                             country_code, survey_coverage,
+                             surveyid_year, survey_acronym,
+                             reporting_year, survey_comparability,
+                             display_cp, survey_time),
+                   by = c(
+                     "country_code",
+                     "surveyid_year",
+                     "survey_acronym"
+                   ),
+                   match_type = "m:1"
+  )
+  
+  if (nrow(dt_c[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure PFW table is up to date"
+    rlang::abort(c(
+      msg,
+      i = hint,
+      i = "Make sure .dta data is up to date by running pipdp"
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_c <- dt_c|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Population   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  #--------- Merge with POP ---------
+  
+  pop_table$pop_domain <- NULL 
+  
+  # --- Reporting_pop ----
+  
+  dt_c <- joyn::joyn(dt_c, pop_table,
+                   by = c("country_code",
+                          "reporting_year = year",
+                          #"area = pop_data_level"
+                          "pop_data_level"
+                   ),
+                   match_type = "m:1"
+                   #keep = "left"
+  )
+  
+  #There is an error for the area level (see if it affects later on)
+  #if (nrow(dt_c[(.joyn == "x" & reporting_level==area)]) > 0) { 
+  if (nrow(dt_c[.joyn == "x"]) > 0) { 
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_c <- dt_c|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)|>
+    setnames("pop", "reporting_pop")
+  
+  # ---- Survey_pop ----
+  
+  dt_svy_pop <- dt_c|>
+    fsubset(survey_year != floor(survey_year)) |>
+    rowbind(dt_c|> fsubset(survey_year != floor(survey_year)), idcol = "id")|>
+    fmutate(year_rnd = case_when(id == 1 ~ ceiling(survey_year),
+                                 id == 2 ~ floor(survey_year),
+                                 .default = NA_integer_),
+            diff = 1 - abs(survey_year-year_rnd))|>
+    joyn::joyn(pop_table, 
+               by = c("country_code", 
+                      "year_rnd = year",
+                      #"area = pop_data_level"
+                      "pop_data_level"
+               ),
+               match_type = "m:1",
+               keep = "left"
+    )
+  
+  
+  if (nrow(dt_svy_pop[.joyn == "x"]) > 0) {
+    msg <- "We should not have NOT-matching observations from survey-mean tables"
+    hint <- "Make sure POP data includes all the countries and pop data levels"
+    rlang::abort(c(
+      msg,
+      i = hint
+    ),
+    class = "pipdm_error"
+    )
+  }
+  
+  dt_svy_pop <- dt_svy_pop|>
+    fgroup_by(survey_id, country_code, survey_year,
+              #reporting_level, area)|>
+              reporting_level)|>
+    collapg(custom = list(fmean = "pop"), w = diff)|>
+    frename(survey_pop = pop)|>
+    fungroup()
+  
+  dt_c <- joyn::joyn(dt_c, dt_svy_pop,
+                   by = c("survey_id", 
+                          "country_code", 
+                          "survey_year",
+                          "reporting_level"
+                          #"area"
+                   ),
+                   match_type = "m:1",
+                   keep = "left"
+  )
+  
+  dt_c <- dt_c|>
+    fsubset(.joyn != "y")|>
+    fselect(-.joyn)
+  
+  # ---- Finalize table ----
+  
+  dt_c <- dt_c |>
+    ftransform(survey_pop = fifelse(is.na(survey_pop),
+                                    reporting_pop, survey_pop))|>
+    ftransform(reporting_pop = survey_pop)
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Distributional Stats   ---------
@@ -194,15 +327,6 @@ db_stats_sac <- function(cache,
   }
   
   dists_final <- rowbind(md_id_level, md_id_national)
-  
-  metadata_vars <- c("cache_id", "reporting_level", 
-                     #"area",
-                     "survey_id", "country_code", "surveyid_year", 
-                     "survey_acronym","survey_year", "welfare_type", 
-                     "distribution_type","gd_type","cpi_data_level",
-                     "ppp_data_level", "gdp_data_level", 
-                     "pce_data_level", "pop_data_level",
-                     "cpi", "ppp")
   
   dt_clean <- dists_final |>
     collapse::join(dt_c ,

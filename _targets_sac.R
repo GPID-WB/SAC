@@ -17,10 +17,13 @@
 
 py                 <- 2017  # PPP year
 branch             <- "DEV"
-release            <- "20240326"  
-identity           <- "PROD"
-max_year_country   <- 2022
-max_year_aggregate <- 2022
+# release            <- "20240429"
+release            <- "20240627"
+# identity           <- "INT"
+identity           <- "TEST"
+max_year_country   <- 2023
+max_year_aggregate <- 2024
+max_year_lineup    <- 2022
 
 config <- config::get(config = Sys.info()['user'])
 base_dir <- config$base_dir
